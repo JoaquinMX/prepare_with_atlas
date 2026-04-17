@@ -1,0 +1,178 @@
+[
+  {
+    "title": "Design a URL shortener",
+    "description": "Design a URL shortening service like bit.ly that takes long URLs and returns short, unique aliases that redirect to the original URL. The service should handle millions of URLs and billions of redirects per day.",
+    "difficulty": "easy",
+    "category": "storage",
+    "tags": ["hashing", "key-value-store", "caching", "scalability"],
+    "reference_solution": null
+  },
+  {
+    "title": "Design a pastebin service",
+    "description": "Design a text storage service like Pastebin that lets users paste and share raw text snippets. Support optional expiration, syntax highlighting metadata, and public/private visibility.",
+    "difficulty": "easy",
+    "category": "storage",
+    "tags": ["object-storage", "key-value-store", "caching"],
+    "reference_solution": null
+  },
+  {
+    "title": "Design a rate limiter",
+    "description": "Design a rate limiter that limits the number of requests a client can make to an API within a time window. It should be distributed, configurable per client/endpoint, and work across multiple servers.",
+    "difficulty": "easy",
+    "category": "infrastructure",
+    "tags": ["rate-limiting", "redis", "distributed-systems", "sliding-window"],
+    "reference_solution": null
+  },
+  {
+    "title": "Design a key-value store",
+    "description": "Design a distributed key-value store like Dynamo or Redis that supports get, put, and delete operations. Consider consistency, replication, partitioning, and failure handling.",
+    "difficulty": "easy",
+    "category": "storage",
+    "tags": ["distributed-systems", "consistency", "replication", "partitioning"],
+    "reference_solution": null
+  },
+  {
+    "title": "Design a web crawler",
+    "description": "Design a scalable web crawler that can crawl billions of pages across the internet. Focus on politeness (not overloading servers), deduplication, crawl scheduling, and distributed coordination.",
+    "difficulty": "easy",
+    "category": "data-processing",
+    "tags": ["crawling", "queuing", "distributed-systems", "deduplication"],
+    "reference_solution": null
+  },
+  {
+    "title": "Design a notification system",
+    "description": "Design a push notification system that supports sending notifications across multiple channels (push, email, SMS) to millions of users. Handle retries, delivery guarantees, and user preferences.",
+    "difficulty": "easy",
+    "category": "messaging",
+    "tags": ["push-notifications", "queuing", "fanout", "reliability"],
+    "reference_solution": null
+  },
+  {
+    "title": "Design a ticket booking system",
+    "description": "Design an online ticket booking system for events. Handle concurrent seat selection, prevent double-booking, and support payment flows. Consider fairness under high load.",
+    "difficulty": "easy",
+    "category": "transactions",
+    "tags": ["concurrency", "transactions", "locking", "inventory"],
+    "reference_solution": null
+  },
+  {
+    "title": "Design Instagram's photo feed",
+    "description": "Design the core functionality of Instagram: users can upload photos, follow other users, and see a feed of recent photos from people they follow. Handle media storage, feed generation, and scale.",
+    "difficulty": "easy",
+    "category": "social",
+    "tags": ["feed-generation", "object-storage", "social-graph", "caching"],
+    "reference_solution": null
+  },
+  {
+    "title": "Design WhatsApp",
+    "description": "Design a real-time messaging application like WhatsApp that supports one-on-one and group messaging, message delivery receipts, and offline message delivery. Handle billions of messages per day.",
+    "difficulty": "medium",
+    "category": "messaging",
+    "tags": ["websockets", "message-queues", "presence", "e2e-encryption", "group-messaging"],
+    "reference_solution": null
+  },
+  {
+    "title": "Design YouTube video streaming",
+    "description": "Design a video streaming platform like YouTube. Handle video upload, transcoding to multiple resolutions, CDN-based delivery, and recommendation at scale.",
+    "difficulty": "medium",
+    "category": "streaming",
+    "tags": ["cdn", "video-transcoding", "object-storage", "streaming-protocols", "recommendations"],
+    "reference_solution": null
+  },
+  {
+    "title": "Design Uber's ride matching",
+    "description": "Design Uber's core matching system that pairs riders with nearby drivers in real time. Consider geospatial indexing, dynamic pricing, driver location updates, and trip state management.",
+    "difficulty": "medium",
+    "category": "geospatial",
+    "tags": ["geospatial-indexing", "real-time", "matching-algorithms", "location-services"],
+    "reference_solution": null
+  },
+  {
+    "title": "Design a distributed cache",
+    "description": "Design a distributed in-memory cache like Memcached or Redis Cluster. Handle consistent hashing, cache eviction policies, replication, and hot key mitigation.",
+    "difficulty": "medium",
+    "category": "storage",
+    "tags": ["caching", "consistent-hashing", "eviction", "replication"],
+    "reference_solution": null
+  },
+  {
+    "title": "Design a search autocomplete system",
+    "description": "Design a search autocomplete (typeahead) system that suggests query completions in under 100ms for millions of concurrent users. Handle personalization, trending queries, and multilingual input.",
+    "difficulty": "medium",
+    "category": "search",
+    "tags": ["trie", "caching", "ranking", "low-latency"],
+    "reference_solution": null
+  },
+  {
+    "title": "Design a distributed message queue",
+    "description": "Design a distributed message queue like Apache Kafka. Support high-throughput publish-subscribe, message durability, consumer groups, and at-least-once delivery.",
+    "difficulty": "medium",
+    "category": "messaging",
+    "tags": ["kafka", "partitioning", "consumer-groups", "durability", "replication"],
+    "reference_solution": null
+  },
+  {
+    "title": "Design Twitter's trending topics",
+    "description": "Design a system that computes and displays trending topics on Twitter in real time. Handle high-velocity tweet streams, windowed aggregations, and regional trends.",
+    "difficulty": "medium",
+    "category": "data-processing",
+    "tags": ["stream-processing", "windowing", "top-k", "real-time"],
+    "reference_solution": null
+  },
+  {
+    "title": "Design an e-commerce flash sale system",
+    "description": "Design a flash sale system (like Amazon Lightning Deals) that sells limited inventory items at discounted prices to millions of users within a short time window. Prevent overselling.",
+    "difficulty": "medium",
+    "category": "transactions",
+    "tags": ["inventory", "concurrency", "redis", "queue", "prevention-of-overselling"],
+    "reference_solution": null
+  },
+  {
+    "title": "Design Google Docs (collaborative editing)",
+    "description": "Design a real-time collaborative document editor like Google Docs. Multiple users should be able to edit the same document simultaneously with minimal conflict and near-instant sync.",
+    "difficulty": "hard",
+    "category": "collaboration",
+    "tags": ["operational-transforms", "crdt", "websockets", "conflict-resolution", "real-time"],
+    "reference_solution": null
+  },
+  {
+    "title": "Design a global CDN from scratch",
+    "description": "Design a global Content Delivery Network from the ground up. Handle edge node selection, cache hierarchy, origin pull strategies, cache invalidation at scale, and DDoS mitigation.",
+    "difficulty": "hard",
+    "category": "infrastructure",
+    "tags": ["cdn", "anycast", "cache-invalidation", "edge-computing", "ddos"],
+    "reference_solution": null
+  },
+  {
+    "title": "Design an LLM inference platform",
+    "description": "Design a platform for serving large language model inference at scale (like OpenAI's API). Handle model loading, GPU scheduling, batching, streaming token delivery, and multi-tenant isolation.",
+    "difficulty": "hard",
+    "category": "ml-systems",
+    "tags": ["gpu-scheduling", "batching", "streaming", "llm", "multi-tenancy"],
+    "reference_solution": null
+  },
+  {
+    "title": "Design a distributed transactions system",
+    "description": "Design a system that supports ACID transactions spanning multiple distributed databases or microservices. Consider 2PC, Saga pattern, and failure compensation.",
+    "difficulty": "hard",
+    "category": "transactions",
+    "tags": ["distributed-transactions", "two-phase-commit", "saga", "consistency"],
+    "reference_solution": null
+  },
+  {
+    "title": "Design a log aggregation and analytics platform",
+    "description": "Design a system like Splunk or the ELK stack that ingests terabytes of logs per day, indexes them for full-text search, and supports real-time dashboards and alerting.",
+    "difficulty": "hard",
+    "category": "data-processing",
+    "tags": ["log-aggregation", "full-text-search", "indexing", "stream-processing", "alerting"],
+    "reference_solution": null
+  },
+  {
+    "title": "Design a federated identity system",
+    "description": "Design an identity and access management system supporting federated login (SSO, OAuth 2.0, SAML) across thousands of enterprise tenants. Handle token lifecycle, delegation, and cross-tenant authorization.",
+    "difficulty": "hard",
+    "category": "security",
+    "tags": ["oauth", "saml", "sso", "jwt", "multi-tenant"],
+    "reference_solution": null
+  }
+]
