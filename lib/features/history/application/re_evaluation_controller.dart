@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:prepare_with_atlas/features/ai_provider/domain/ai_message.dart';
 import 'package:prepare_with_atlas/features/ai_provider/domain/ai_provider.dart';
 import 'package:prepare_with_atlas/features/evaluation/application/evaluation_dependency_providers.dart';
-import 'package:prepare_with_atlas/features/evaluation/application/prompt_builder.dart';
 import 'package:prepare_with_atlas/features/evaluation/application/response_parser.dart';
 import 'package:prepare_with_atlas/features/history/application/re_evaluation_state.dart';
 import 'package:prepare_with_atlas/features/interview_session/domain/stage_note.dart';

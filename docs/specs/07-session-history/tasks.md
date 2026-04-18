@@ -37,8 +37,8 @@
 
 - **T022**: Write tests for retry flow — verify: tapping "Retry This Problem" creates new session with same problemId, navigates to Session Setup, does not modify existing session.
 - **T023**: Wire retry button to navigate to Session Setup with `problemId` query param.
-- **T024**: Write tests for re-evaluation flow — verify: triggers new evaluation with existing session data, stores as new evaluation row, does not overwrite original.
-- **T025**: Implement re-evaluate button in SessionDetailScreen, wired to EvaluationController.
+- **T024**: ✅ Write tests for re-evaluation flow — verify: triggers new evaluation with existing session data, stores as new evaluation row, does not overwrite original.
+- **T025**: ✅ Implement re-evaluate button in SessionDetailScreen, wired to `ReEvaluationController` via a provider picker sheet; non-blocking (user can leave tab while it runs); multiple evaluations exposed via dropdown at top of Evaluation tab.
 - **T026**: Write tests for delete session — verify: cascade deletes notes, whiteboard, evaluations; problem remains (for other attempts).
 - **T027**: Implement delete with confirmation dialog.
 

@@ -26,13 +26,19 @@ import 'package:webview_flutter/webview_flutter.dart';
 class HeadlessWhiteboardScreenshot {
   HeadlessWhiteboardScreenshot._();
 
+  /// Captures a screenshot of [sceneJson]. Caller must supply an
+  /// [OverlayState] (typically the root one: `Overlay.of(context,
+  /// rootOverlay: true)`) — resolving it here from a context is brittle
+  /// because the context that owns the overlay cannot be used to look itself
+  /// up. Capturing the [OverlayState] at the call site before any `await`
+  /// also sidesteps "widget unmounted" issues when the originating button
+  /// rebuilds.
   static Future<Uint8List?> capture({
-    required BuildContext context,
+    required OverlayState overlay,
     required String sceneJson,
     Duration timeout = const Duration(seconds: 20),
     double maxWidth = 1200,
   }) async {
-    final overlay = Overlay.of(context, rootOverlay: true);
     final completer = Completer<Uint8List?>();
     late final OverlayEntry entry;
 

@@ -115,6 +115,7 @@ SessionSummary _makeSummary({int sessionId = 1}) => SessionSummary(
 Widget _buildScreen({
   required SessionSummary summary,
   EvaluationResult? evaluation,
+  List<EvaluationResult>? evaluations,
   List<StageNote> notes = const [],
   int attemptCount = 1,
   WhiteboardRepository? whiteboardRepo,
@@ -122,6 +123,8 @@ Widget _buildScreen({
 }) {
   final sessionId = summary.session.id;
   final problemId = summary.session.problemId;
+  final evalList = evaluations ??
+      (evaluation != null ? [evaluation] : const <EvaluationResult>[]);
 
   return ProviderScope(
     overrides: [
@@ -129,9 +132,9 @@ Widget _buildScreen({
       stageNotesForSessionProvider(
         sessionId,
       ).overrideWith((ref) async => notes),
-      evaluationForSessionProvider(
+      evaluationsForSessionProvider(
         sessionId.toString(),
-      ).overrideWith((ref) async => evaluation),
+      ).overrideWith((ref) async => evalList),
       attemptCountForProblemProvider(
         problemId,
       ).overrideWith((ref) async => attemptCount),
@@ -229,6 +232,57 @@ void main() {
       // ScoreCardWidget renders dimension labels
       expect(find.text('Requirements Gathering'), findsOneWidget);
     });
+
+    testWidgets('Re-evaluate button is always visible', (tester) async {
+      await tester.pumpWidget(
+        _buildScreen(summary: _makeSummary(), evaluation: _makeEval('1')),
+      );
+      await tester.pump();
+
+      expect(find.byKey(const Key('re_evaluate_button')), findsOneWidget);
+    });
+
+    testWidgets(
+      'evaluation tab shows picker only when multiple evaluations exist',
+      (tester) async {
+        final eval1 = _makeEval('1').copyWith(
+          id: 'eval-1',
+          providerUsed: 'anthropic',
+          createdAt: DateTime(2026, 4, 9),
+        );
+        final eval2 = _makeEval('1').copyWith(
+          id: 'eval-2',
+          providerUsed: 'gemini',
+          createdAt: DateTime(2026, 4, 10),
+        );
+
+        await tester.pumpWidget(
+          _buildScreen(
+            summary: _makeSummary(),
+            evaluations: [eval2, eval1],
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Evaluation'));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('re_eval_picker')), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'evaluation tab hides picker when only one evaluation exists',
+      (tester) async {
+        await tester.pumpWidget(
+          _buildScreen(summary: _makeSummary(), evaluation: _makeEval('1')),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Evaluation'));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('re_eval_picker')), findsNothing);
+      },
+    );
   });
 
   group('_WhiteboardTab', () {
