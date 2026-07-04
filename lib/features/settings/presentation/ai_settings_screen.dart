@@ -1,16 +1,14 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:prepare_with_atlas/core/theme/atlas_colors.dart';
 import 'package:prepare_with_atlas/features/ai_provider/application/ai_provider_providers.dart';
 import 'package:prepare_with_atlas/features/ai_provider/application/ai_provider_state.dart';
-import 'package:prepare_with_atlas/features/ai_provider/domain/ai_provider.dart';
 import 'package:prepare_with_atlas/features/ai_provider/domain/ai_provider_config.dart';
+import 'package:prepare_with_atlas/features/settings/presentation/widgets/all_providers_form.dart';
+import 'package:prepare_with_atlas/features/settings/presentation/widgets/gemini_model_picker.dart';
+import 'package:prepare_with_atlas/features/settings/presentation/widgets/ollama_settings_form.dart';
+import 'package:prepare_with_atlas/features/settings/presentation/widgets/openai_oauth_button.dart';
 import 'package:url_launcher/url_launcher.dart';
-
-/// Possible states for the Gemini model picker.
-enum _GeminiPickerState { initial, loading, loaded, error }
 
 /// Settings screen for configuring the active AI provider.
 ///
@@ -32,21 +30,25 @@ class _AiSettingsScreenState extends ConsumerState<AiSettingsScreen> {
     text: 'http://localhost:11434',
   );
 
-  // Ollama model discovery state
-  // null  = not yet attempted
-  // []    = server reachable but no models installed
-  // [...] = models available
-  List<String>? _ollamaModels;
-  bool _isLoadingModels = false;
-  // Non-null only when Ollama is unreachable (distinct from empty models list).
-  String? _ollamaModelsError;
+  // Per-capability model overrides
+  final _textModelController = TextEditingController();
+  final _visionModelController = TextEditingController();
+  final _audioModelController = TextEditingController();
+  bool _showCapabilityModels = false;
+
   String? _selectedOllamaModel;
 
-  // Gemini model picker state
-  _GeminiPickerState _geminiPickerState = _GeminiPickerState.initial;
-  List<String> _geminiModels = [];
+  // "All" consolidated model picker selections (parent-owned because the
+  // save handler builds the config from them; the picker itself lives in
+  // [AllProvidersForm]).
+  String _selectedTextModel = '';
+  String _selectedVisionModel = '';
+  String _selectedAudioModel = '';
+
+  // Gemini model picker selection (the picker widget owns its own loading
+  // state machine; the parent only retains the user's last selection so it
+  // survives navigation away from the gemini provider tab).
   String? _selectedGeminiModel;
-  String? _geminiPickerError;
 
   bool _apiKeyObscured = true;
 
@@ -56,6 +58,7 @@ class _AiSettingsScreenState extends ConsumerState<AiSettingsScreen> {
     ('gemini', 'Google Gemini', Icons.star),
     ('openrouter', 'OpenRouter', Icons.hub),
     ('ollama', 'Ollama', Icons.computer),
+    ('all', 'All', Icons.select_all),
   ];
 
   @override
@@ -63,6 +66,9 @@ class _AiSettingsScreenState extends ConsumerState<AiSettingsScreen> {
     _apiKeyController.dispose();
     _modelController.dispose();
     _ollamaUrlController.dispose();
+    _textModelController.dispose();
+    _visionModelController.dispose();
+    _audioModelController.dispose();
     super.dispose();
   }
 
@@ -131,12 +137,13 @@ class _AiSettingsScreenState extends ConsumerState<AiSettingsScreen> {
       return GestureDetector(
         onTap: () => setState(() {
           _selectedProvider = id;
-          if (id != 'gemini') {
-            _geminiPickerState = _GeminiPickerState.initial;
-            _geminiModels = [];
+          if (id != 'gemini' && id != 'all') {
+            // The picker widget resets its internal state on rebuild;
+            // we only need to clear the parent-owned selection.
             _selectedGeminiModel = null;
-            _geminiPickerError = null;
           }
+          // The "All" form auto-loads its catalogs in initState; no parent
+          // bookkeeping is needed when the user switches to it.
         }),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
@@ -201,6 +208,19 @@ class _AiSettingsScreenState extends ConsumerState<AiSettingsScreen> {
     if (_selectedProvider == 'ollama') {
       return _buildOllamaForm();
     }
+    if (_selectedProvider == 'all') {
+      return AllProvidersForm(
+        ollamaUrlController: _ollamaUrlController,
+        selectedTextModel: _selectedTextModel,
+        selectedVisionModel: _selectedVisionModel,
+        selectedAudioModel: _selectedAudioModel,
+        onTextModelSelected: (v) => setState(() => _selectedTextModel = v),
+        onVisionModelSelected: (v) =>
+            setState(() => _selectedVisionModel = v),
+        onAudioModelSelected: (v) => setState(() => _selectedAudioModel = v),
+        onSave: _onSaveAllModels,
+      );
+    }
     return _buildApiKeyForm();
   }
 
@@ -241,7 +261,12 @@ class _AiSettingsScreenState extends ConsumerState<AiSettingsScreen> {
       ),
       const SizedBox(height: 16),
       if (_selectedProvider == 'gemini')
-        _buildGeminiModelPicker()
+        GeminiModelPicker(
+          apiKeyController: _apiKeyController,
+          selectedModel: _selectedGeminiModel,
+          onModelSelected: (model) =>
+              setState(() => _selectedGeminiModel = model),
+        )
       else ...[
         _fieldLabel('Model Override (optional)'),
         const SizedBox(height: 8),
@@ -270,21 +295,11 @@ class _AiSettingsScreenState extends ConsumerState<AiSettingsScreen> {
       ],
       const SizedBox(height: 16),
       if (_selectedProvider == 'openai') ...[
-        OutlinedButton.icon(
-          onPressed: _onSignInWithChatGpt,
-          icon: const Icon(Icons.login),
-          label: const Text('Sign in with ChatGPT'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: AtlasColors.textSecondary,
-            side: const BorderSide(color: AtlasColors.border),
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-        ),
+        const OpenAiOAuthButton(),
         const SizedBox(height: 12),
       ],
+      _buildCapabilityModelsSection(),
+      const SizedBox(height: 16),
       ElevatedButton(
         onPressed: _onSaveAndTest,
         style: ElevatedButton.styleFrom(
@@ -298,555 +313,87 @@ class _AiSettingsScreenState extends ConsumerState<AiSettingsScreen> {
     ],
   );
 
-  Widget _buildOllamaForm() => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      _fieldLabel('Ollama Server URL'),
-      const SizedBox(height: 8),
-      Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _ollamaUrlController,
-              style: const TextStyle(color: AtlasColors.textPrimary),
-              decoration: InputDecoration(
-                hintText: 'http://localhost:11434',
-                hintStyle: const TextStyle(color: AtlasColors.textMuted),
-                filled: true,
-                fillColor: AtlasColors.surface,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AtlasColors.border),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AtlasColors.border),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AtlasColors.accent),
-                ),
-              ),
-              onSubmitted: (_) => unawaited(_loadOllamaModels()),
-            ),
-          ),
-          const SizedBox(width: 8),
-          IconButton(
-            tooltip: 'Reload models',
-            icon: const Icon(Icons.refresh, color: AtlasColors.textSecondary),
-            onPressed: () => unawaited(_loadOllamaModels()),
-          ),
-        ],
-      ),
-      const SizedBox(height: 16),
-      _fieldLabel('Model'),
-      const SizedBox(height: 8),
-      _buildModelPicker(),
-      if (_ollamaModels != null && _ollamaModels!.isNotEmpty) ...[
-        const SizedBox(height: 12),
-        _buildCloudModelsNote(),
-      ],
-      const SizedBox(height: 16),
-      ElevatedButton(
-        onPressed: _selectedOllamaModel != null ? _onSaveAndTest : null,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AtlasColors.accent,
-          foregroundColor: AtlasColors.textPrimary,
-          disabledBackgroundColor: AtlasColors.surface,
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-        child: const Text('Save & Test Connection'),
-      ),
-    ],
+  Widget _buildOllamaForm() => OllamaSettingsForm(
+    ollamaUrlController: _ollamaUrlController,
+    selectedOllamaModel: _selectedOllamaModel,
+    onModelSelected: (model) => setState(() => _selectedOllamaModel = model),
+    onSaveAndTest: _onSaveAndTest,
+    textModelController: _textModelController,
+    visionModelController: _visionModelController,
+    audioModelController: _audioModelController,
+    buildCapabilityModelsSection: _buildCapabilityModelsSection,
   );
 
-  Widget _buildModelPicker() {
-    if (_isLoadingModels) {
-      return const Row(
-        children: [
-          SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-          SizedBox(width: 8),
-          Text(
-            'Loading models…',
-            style: TextStyle(color: AtlasColors.textSecondary),
-          ),
-        ],
-      );
-    }
-
-    final models = _ollamaModels;
-
-    // Not yet attempted — show load button.
-    if (models == null) {
-      return OutlinedButton.icon(
-        onPressed: () => unawaited(_loadOllamaModels()),
-        icon: const Icon(Icons.search),
-        label: const Text('Load available models'),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AtlasColors.textSecondary,
-          side: const BorderSide(color: AtlasColors.border),
-        ),
-      );
-    }
-
-    // Server unreachable or no models installed.
-    if (models.isEmpty) {
-      final isError = _ollamaModelsError != null;
-      return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AtlasColors.surface,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AtlasColors.border),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  isError ? Icons.error_outline : Icons.info_outline,
-                  color: isError ? AtlasColors.danger : AtlasColors.warning,
-                  size: 18,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  isError ? 'Cannot reach Ollama' : 'No models installed',
-                  style: const TextStyle(
-                    color: AtlasColors.textPrimary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-            if (isError) ...[
-              const SizedBox(height: 6),
-              Text(
-                _ollamaModelsError!,
-                style: const TextStyle(
-                  color: AtlasColors.textSecondary,
-                  fontSize: 13,
-                ),
-              ),
-            ],
-            const SizedBox(height: 8),
-            const Text(
-              'Run these commands in your terminal to install'
-              ' local or cloud models:',
-              style: TextStyle(color: AtlasColors.textSecondary, fontSize: 13),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: AtlasColors.background,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: AtlasColors.border),
-              ),
-              child: const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Local model:',
-                    style: TextStyle(
-                      color: AtlasColors.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  SizedBox(height: 4),
-                  SelectableText(
-                    'ollama pull <model-name>',
-                    style: TextStyle(
-                      color: AtlasColors.textPrimary,
-                      fontFamily: 'monospace',
-                      fontSize: 13,
-                    ),
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    'Cloud model:',
-                    style: TextStyle(
-                      color: AtlasColors.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  SizedBox(height: 4),
-                  SelectableText(
-                    'ollama run <model-name>:cloud',
-                    style: TextStyle(
-                      color: AtlasColors.textPrimary,
-                      fontFamily: 'monospace',
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 16,
-              runSpacing: 8,
-              children: [
-                GestureDetector(
-                  onTap: () => unawaited(
-                    launchUrl(Uri.parse('https://ollama.com/library')),
-                  ),
-                  child: const Text(
-                    'Browse library →',
-                    style: TextStyle(
-                      color: AtlasColors.accent,
-                      fontSize: 13,
-                      decoration: TextDecoration.underline,
-                    ),
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () => unawaited(
-                    launchUrl(Uri.parse('https://ollama.com/search?c=cloud')),
-                  ),
-                  child: const Text(
-                    'Browse cloud models →',
-                    style: TextStyle(
-                      color: AtlasColors.accent,
-                      fontSize: 13,
-                      decoration: TextDecoration.underline,
-                    ),
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () => unawaited(
-                    launchUrl(Uri.parse('https://www.canirun.ai/')),
-                  ),
-                  child: const Text(
-                    'Check if model runs on your PC →',
-                    style: TextStyle(
-                      color: AtlasColors.accent,
-                      fontSize: 13,
-                      decoration: TextDecoration.underline,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: () => unawaited(_loadOllamaModels()),
-              icon: const Icon(Icons.refresh, size: 16),
-              label: const Text('Check again'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AtlasColors.textSecondary,
-                side: const BorderSide(color: AtlasColors.border),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    // Models available — show dropdown.
-    return DropdownButtonFormField<String>(
-      initialValue: _selectedOllamaModel,
-      dropdownColor: AtlasColors.surface,
-      style: const TextStyle(color: AtlasColors.textPrimary),
-      decoration: InputDecoration(
-        filled: true,
-        fillColor: AtlasColors.surface,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AtlasColors.border),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AtlasColors.border),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AtlasColors.accent),
-        ),
-      ),
-      hint: const Text(
-        'Select a model',
-        style: TextStyle(color: AtlasColors.textMuted),
-      ),
-      items: models
-          .map((m) => DropdownMenuItem(value: m, child: Text(m)))
-          .toList(),
-      onChanged: (value) => setState(() => _selectedOllamaModel = value),
-    );
+  Future<String?> _getStoredApiKey(String provider) async {
+    // Read stored config from the controller's state
+    final aiState = ref.read(aiProviderControllerProvider);
+    final config = aiState.activeConfig;
+    if (config == null) return null;
+    return switch (config) {
+      ApiKeyConfig(:final providerName, :final apiKey)
+          when providerName == provider => apiKey,
+      _ => null,
+    };
   }
 
-  Widget _buildCloudModelsNote() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Run these commands in your terminal to install'
-          ' local or cloud models:',
-          style: TextStyle(color: AtlasColors.textSecondary, fontSize: 13),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: AtlasColors.background,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: AtlasColors.border),
-          ),
-          child: const Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Local model:',
-                style: TextStyle(
-                  color: AtlasColors.textSecondary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              SizedBox(height: 4),
-              SelectableText(
-                'ollama pull <model-name>',
-                style: TextStyle(
-                  color: AtlasColors.textPrimary,
-                  fontFamily: 'monospace',
-                  fontSize: 13,
-                ),
-              ),
-              SizedBox(height: 8),
-              Text(
-                'Cloud model:',
-                style: TextStyle(
-                  color: AtlasColors.textSecondary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              SizedBox(height: 4),
-              SelectableText(
-                'ollama run <model-name>:cloud',
-                style: TextStyle(
-                  color: AtlasColors.textPrimary,
-                  fontFamily: 'monospace',
-                  fontSize: 13,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 16,
-          runSpacing: 8,
-          children: [
-            GestureDetector(
-              onTap: () => unawaited(
-                launchUrl(Uri.parse('https://ollama.com/search?c=cloud')),
-              ),
-              child: const Text(
-                'Browse cloud models →',
-                style: TextStyle(
-                  color: AtlasColors.accent,
-                  fontSize: 13,
-                  decoration: TextDecoration.underline,
-                ),
-              ),
-            ),
-            GestureDetector(
-              onTap: () =>
-                  unawaited(launchUrl(Uri.parse('https://www.canirun.ai/'))),
-              child: const Text(
-                'Check if model runs on your PC →',
-                style: TextStyle(
-                  color: AtlasColors.accent,
-                  fontSize: 13,
-                  decoration: TextDecoration.underline,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
+  Future<void> _onSaveAllModels() async {
+    // Collect all three per-capability selections
+    final textParts = _selectedTextModel.split('/');
+    final visionParts = _selectedVisionModel.split('/');
+    final audioParts = _selectedAudioModel.split('/');
 
-  Future<void> _loadOllamaModels() async {
-    setState(() {
-      _isLoadingModels = true;
-      _ollamaModelsError = null;
-    });
-    try {
-      final url = _ollamaUrlController.text.trim();
-      final models = await ref
-          .read(aiProviderControllerProvider.notifier)
-          .fetchOllamaModels(url);
-      if (!mounted) return;
-      setState(() {
-        _ollamaModels = models;
-        _isLoadingModels = false;
-        if (models.isNotEmpty) {
-          _selectedOllamaModel ??= models.first;
-        }
-      });
-    } on AiProviderException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _ollamaModels = [];
-        _isLoadingModels = false;
-        _ollamaModelsError = e.message;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _ollamaModels = [];
-        _isLoadingModels = false;
-        _ollamaModelsError = 'Could not connect to Ollama. Is it running?';
-      });
-    }
-  }
-
-  Future<void> _loadGeminiModels() async {
-    final apiKey = _apiKeyController.text.trim();
-    if (apiKey.isEmpty) {
+    if (textParts.length != 2 && visionParts.length != 2 && audioParts.length != 2) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter your Gemini API key first.')),
+        const SnackBar(content: Text('Select at least one model to save.')),
       );
       return;
     }
-    setState(() {
-      _geminiPickerState = _GeminiPickerState.loading;
-      _geminiModels = [];
-      _selectedGeminiModel = null;
-      _geminiPickerError = null;
-    });
-    try {
-      final models = await ref
-          .read(aiProviderControllerProvider.notifier)
-          .fetchGeminiModels(apiKey);
-      if (!mounted) return;
-      setState(() {
-        _geminiModels = models;
-        _geminiPickerState = models.isEmpty
-            ? _GeminiPickerState.error
-            : _GeminiPickerState.loaded;
-        _geminiPickerError = models.isEmpty
-            ? 'No models found for this API key.'
-            : null;
-      });
-    } on AiProviderException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _geminiPickerState = _GeminiPickerState.error;
-        _geminiPickerError = e.message;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _geminiPickerState = _GeminiPickerState.error;
-        _geminiPickerError = e.toString().replaceFirst('Exception: ', '');
-      });
-    }
-  }
 
-  Widget _buildGeminiModelPicker() {
-    return switch (_geminiPickerState) {
-      _GeminiPickerState.initial => OutlinedButton.icon(
-        onPressed: () => unawaited(_loadGeminiModels()),
-        icon: const Icon(Icons.search, size: 18),
-        label: const Text('Load available models'),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AtlasColors.textSecondary,
-          side: const BorderSide(color: AtlasColors.border),
-        ),
+    // If any selection is from Ollama, use the Ollama URL; otherwise use the first available API key
+    String? providerName;
+    String? apiKey;
+    if (textParts.length == 2) {
+      providerName = textParts[0];
+    } else if (visionParts.length == 2) {
+      providerName = visionParts[0];
+    } else if (audioParts.length == 2) {
+      providerName = audioParts[0];
+    }
+
+    if (providerName != 'ollama') {
+      apiKey = await _getStoredApiKey(providerName ?? 'openai');
+    }
+
+    AiProviderConfig config;
+    if (providerName == 'ollama') {
+      config = AiProviderConfig.ollama(
+        baseUrl: _ollamaUrlController.text.trim(),
+        modelName: textParts.length == 2 ? textParts[1] : 'llama3',
+        textModelOverride: textParts.length == 2 ? textParts[1] : null,
+        visionModelOverride: visionParts.length == 2 ? visionParts[1] : null,
+        audioModelOverride: audioParts.length == 2 ? audioParts[1] : null,
+      );
+    } else {
+      config = AiProviderConfig.apiKey(
+        providerName: providerName ?? 'openai',
+        apiKey: apiKey ?? '',
+        modelOverride: textParts.length == 2 ? textParts[1] : '',
+        textModelOverride: textParts.length == 2 ? textParts[1] : null,
+        visionModelOverride: visionParts.length == 2 ? visionParts[1] : null,
+        audioModelOverride: audioParts.length == 2 ? audioParts[1] : null,
+      );
+    }
+
+    final notifier = ref.read(aiProviderControllerProvider.notifier);
+    await notifier.setProvider(config);
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Saved per-capability models.'),
+        backgroundColor: AtlasColors.success,
       ),
-      _GeminiPickerState.loading => const Row(
-        children: [
-          SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-          SizedBox(width: 8),
-          Text(
-            'Loading models…',
-            style: TextStyle(color: AtlasColors.textSecondary),
-          ),
-        ],
-      ),
-      _GeminiPickerState.loaded => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _fieldLabel('Model'),
-          const SizedBox(height: 8),
-          DropdownButtonFormField<String>(
-            initialValue: _selectedGeminiModel,
-            dropdownColor: AtlasColors.surface,
-            style: const TextStyle(color: AtlasColors.textPrimary),
-            decoration: InputDecoration(
-              filled: true,
-              fillColor: AtlasColors.surface,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: AtlasColors.border),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: AtlasColors.border),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: AtlasColors.accent),
-              ),
-            ),
-            hint: const Text(
-              'Select a model',
-              style: TextStyle(color: AtlasColors.textMuted),
-            ),
-            items: _geminiModels
-                .map((m) => DropdownMenuItem(value: m, child: Text(m)))
-                .toList(),
-            onChanged: (v) => setState(() => _selectedGeminiModel = v),
-          ),
-          const SizedBox(height: 8),
-          TextButton.icon(
-            onPressed: () => unawaited(_loadGeminiModels()),
-            icon: const Icon(Icons.refresh, size: 16),
-            label: const Text('Refresh list'),
-            style: TextButton.styleFrom(
-              foregroundColor: AtlasColors.textMuted,
-              padding: EdgeInsets.zero,
-            ),
-          ),
-        ],
-      ),
-      _GeminiPickerState.error => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            _geminiPickerError ?? 'Failed to load Gemini models.',
-            style: const TextStyle(color: AtlasColors.danger, fontSize: 13),
-          ),
-          const SizedBox(height: 8),
-          OutlinedButton.icon(
-            onPressed: () => unawaited(_loadGeminiModels()),
-            icon: const Icon(Icons.refresh, size: 16),
-            label: const Text('Try again'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AtlasColors.textSecondary,
-              side: const BorderSide(color: AtlasColors.border),
-            ),
-          ),
-        ],
-      ),
-    };
+    );
   }
 
   Widget _fieldLabel(String label) => Text(
@@ -923,21 +470,6 @@ class _AiSettingsScreenState extends ConsumerState<AiSettingsScreen> {
     ),
   );
 
-  Future<void> _onSignInWithChatGpt() async {
-    final notifier = ref.read(aiProviderControllerProvider.notifier);
-    await notifier.signInWithOpenAiOAuth();
-    if (!mounted) return;
-    final error = ref.read(aiProviderControllerProvider).errorMessage;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(error ?? 'Signed in with ChatGPT successfully.'),
-        backgroundColor: error != null
-            ? AtlasColors.danger
-            : AtlasColors.success,
-      ),
-    );
-  }
-
   Future<void> _onSaveAndTest() async {
     final config = _buildConfig();
     if (config == null) {
@@ -986,6 +518,15 @@ class _AiSettingsScreenState extends ConsumerState<AiSettingsScreen> {
       return AiProviderConfig.ollama(
         baseUrl: _ollamaUrlController.text.trim(),
         modelName: model,
+        textModelOverride: _textModelController.text.trim().isEmpty
+            ? null
+            : _textModelController.text.trim(),
+        visionModelOverride: _visionModelController.text.trim().isEmpty
+            ? null
+            : _visionModelController.text.trim(),
+        audioModelOverride: _audioModelController.text.trim().isEmpty
+            ? null
+            : _audioModelController.text.trim(),
       );
     }
     final key = _apiKeyController.text.trim();
@@ -997,12 +538,210 @@ class _AiSettingsScreenState extends ConsumerState<AiSettingsScreen> {
         providerName: _selectedProvider,
         apiKey: key,
         modelOverride: model,
+        textModelOverride: _textModelController.text.trim().isEmpty
+            ? null
+            : _textModelController.text.trim(),
+        visionModelOverride: _visionModelController.text.trim().isEmpty
+            ? null
+            : _visionModelController.text.trim(),
+        audioModelOverride: _audioModelController.text.trim().isEmpty
+            ? null
+            : _audioModelController.text.trim(),
       );
     }
     return AiProviderConfig.apiKey(
       providerName: _selectedProvider,
       apiKey: key,
       modelOverride: _modelController.text.trim(),
+      textModelOverride: _textModelController.text.trim().isEmpty
+          ? null
+          : _textModelController.text.trim(),
+      visionModelOverride: _visionModelController.text.trim().isEmpty
+          ? null
+          : _visionModelController.text.trim(),
+      audioModelOverride: _audioModelController.text.trim().isEmpty
+          ? null
+          : _audioModelController.text.trim(),
+    );
+  }
+
+  Widget _buildCapabilityModelsSection() => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          GestureDetector(
+            onTap: () =>
+                setState(() => _showCapabilityModels = !_showCapabilityModels),
+            child: Row(
+              children: [
+                Icon(
+                  _showCapabilityModels
+                      ? Icons.expand_less
+                      : Icons.expand_more,
+                  color: AtlasColors.textMuted,
+                  size: 20,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'Per-Capability Models',
+                  style: TextStyle(
+                    color: _showCapabilityModels
+                        ? AtlasColors.textPrimary
+                        : AtlasColors.textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AtlasColors.accent.withAlpha(30),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text(
+                    'Advanced',
+                    style: TextStyle(
+                      color: AtlasColors.accent,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_showCapabilityModels) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AtlasColors.surface,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AtlasColors.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Override models for specific tasks. '
+                    'Leave empty to use the default model above.',
+                    style: TextStyle(
+                      color: AtlasColors.textMuted,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _CapabilityModelRow(
+                    icon: Icons.text_fields,
+                    label: 'Text Evaluation',
+                    hint: 'e.g. claude-sonnet-4-20250514',
+                    controller: _textModelController,
+                    description: 'Full evaluation, reasoning, narrative',
+                  ),
+                  const SizedBox(height: 10),
+                  _CapabilityModelRow(
+                    icon: Icons.image,
+                    label: 'Vision',
+                    hint: 'e.g. gpt-4o',
+                    controller: _visionModelController,
+                    description: 'Whiteboard diagram analysis',
+                  ),
+                  const SizedBox(height: 10),
+                  _CapabilityModelRow(
+                    icon: Icons.mic,
+                    label: 'Audio Transcription',
+                    hint: 'e.g. whisper-1',
+                    controller: _audioModelController,
+                    description: 'FLAC audio → text',
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      );
+}
+
+/// A row widget for entering a per-capability model override.
+class _CapabilityModelRow extends StatelessWidget {
+  /// Creates a [_CapabilityModelRow].
+  const _CapabilityModelRow({
+    required this.icon,
+    required this.label,
+    required this.hint,
+    required this.controller,
+    required this.description,
+  });
+
+  final IconData icon;
+  final String label;
+  final String hint;
+  final TextEditingController controller;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 16, color: AtlasColors.textMuted),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  color: AtlasColors.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                description,
+                style: const TextStyle(
+                  color: AtlasColors.textMuted,
+                  fontSize: 11,
+                ),
+              ),
+              const SizedBox(height: 4),
+              TextField(
+                controller: controller,
+                style: const TextStyle(
+                  color: AtlasColors.textPrimary,
+                  fontSize: 13,
+                ),
+                decoration: InputDecoration(
+                  hintText: hint,
+                  hintStyle: const TextStyle(color: AtlasColors.textMuted),
+                  filled: true,
+                  fillColor: AtlasColors.background,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(6),
+                    borderSide: const BorderSide(color: AtlasColors.border),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(6),
+                    borderSide: const BorderSide(color: AtlasColors.border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(6),
+                    borderSide: const BorderSide(color: AtlasColors.accent),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  isDense: true,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

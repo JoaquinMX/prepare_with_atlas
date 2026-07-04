@@ -11,6 +11,8 @@ import 'package:prepare_with_atlas/features/interview_session/domain/session_rep
 import 'package:prepare_with_atlas/features/interview_session/domain/stage_note.dart';
 import 'package:prepare_with_atlas/features/interview_session/domain/timer_behavior.dart';
 import 'package:prepare_with_atlas/features/interview_session/domain/timer_config.dart';
+import 'package:prepare_with_atlas/features/recording/application/audio_recorder_state.dart';
+import 'package:prepare_with_atlas/features/recording/application/audio_recorder_controller.dart';
 
 /// Orchestrates an interview session: lifecycle, stage transitions, and notes.
 class SessionController extends Notifier<SessionState> {
@@ -28,6 +30,7 @@ class SessionController extends Notifier<SessionState> {
     required int problemId,
     required TimerBehavior behavior,
     required TimerConfig config,
+    required RecordingMode recordingMode,
   }) async {
     dev.log(
       'startFullSession: problemId=$problemId behavior=$behavior',
@@ -56,10 +59,14 @@ class SessionController extends Notifier<SessionState> {
       ref
           .read(stageTimerControllerProvider.notifier)
           .startStage(firstStage, config, behavior);
+      if (recordingMode == RecordingMode.voiceRecording) {
+        await _startVoiceRecording(created.id, firstStage);
+      }
       state = state.copyWith(
         currentSession: created,
         currentStage: firstStage,
         isLoading: false,
+        recordingMode: recordingMode,
       );
       dev.log(
         'startFullSession: state updated — currentSession=${created.id}',
@@ -85,6 +92,7 @@ class SessionController extends Notifier<SessionState> {
     required InterviewStage stage,
     required TimerBehavior behavior,
     required TimerConfig config,
+    required RecordingMode recordingMode,
   }) async {
     dev.log(
       'startSingleStageSession: problemId=$problemId stage=$stage '
@@ -114,10 +122,14 @@ class SessionController extends Notifier<SessionState> {
       ref
           .read(stageTimerControllerProvider.notifier)
           .startStage(stage, config, behavior);
+      if (recordingMode == RecordingMode.voiceRecording) {
+        await _startVoiceRecording(created.id, stage);
+      }
       state = state.copyWith(
         currentSession: created,
         currentStage: stage,
         isLoading: false,
+        recordingMode: recordingMode,
       );
       dev.log(
         'startSingleStageSession: state updated — '
@@ -175,9 +187,21 @@ class SessionController extends Notifier<SessionState> {
     }
 
     final nextStage = InterviewStage.values[idx + 1];
+
+    // Stop current voice recording before advancing.
+    if (state.recordingMode == RecordingMode.voiceRecording) {
+      await _stopVoiceRecording();
+    }
+
     ref
         .read(stageTimerControllerProvider.notifier)
         .startStage(nextStage, session.timerConfig, session.timerBehavior);
+
+    // Start new voice recording for next stage.
+    if (state.recordingMode == RecordingMode.voiceRecording) {
+      await _startVoiceRecording(session.id, nextStage);
+    }
+
     state = state.copyWith(currentStage: nextStage);
   }
 
@@ -187,6 +211,12 @@ class SessionController extends Notifier<SessionState> {
     final session = state.currentSession;
     if (session == null) return;
     await _saveCurrentNote();
+
+    // Stop voice recording if active.
+    if (state.recordingMode == RecordingMode.voiceRecording) {
+      await _stopVoiceRecording();
+    }
+
     ref.read(stageTimerControllerProvider.notifier).reset();
     final completed = session.copyWith(
       status: SessionStatus.completed,
@@ -210,6 +240,12 @@ class SessionController extends Notifier<SessionState> {
     final session = state.currentSession;
     if (session == null) return;
     _debounce?.cancel();
+
+    // Cancel any active voice recording.
+    if (state.recordingMode == RecordingMode.voiceRecording) {
+      await ref.read(audioRecorderProvider.notifier).cancelRecording();
+    }
+
     ref.read(stageTimerControllerProvider.notifier).reset();
     final abandoned = session.copyWith(status: SessionStatus.abandoned);
     await _repo.update(abandoned);
@@ -217,6 +253,17 @@ class SessionController extends Notifier<SessionState> {
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
+
+  Future<void> _startVoiceRecording(int sessionId, InterviewStage stage) async {
+    await ref.read(audioRecorderProvider.notifier).startRecording(
+          sessionId: sessionId,
+          stageIndex: InterviewStage.values.indexOf(stage),
+        );
+  }
+
+  Future<void> _stopVoiceRecording() async {
+    await ref.read(audioRecorderProvider.notifier).stopRecording();
+  }
 
   Future<void> _saveCurrentNote({String? notes}) async {
     final session = state.currentSession;
@@ -238,6 +285,15 @@ class SessionController extends Notifier<SessionState> {
       _ => 0,
     };
 
+    // Capture audio file path if voice recording is active.
+    String? audioFilePath;
+    if (state.recordingMode == RecordingMode.voiceRecording) {
+      final recorderState = ref.read(audioRecorderProvider);
+      if (recorderState is AudioRecorderRecording) {
+        audioFilePath = recorderState.filePath;
+      }
+    }
+
     final existing = state.stageNotes[stage.key];
     final note = StageNote(
       id: existing?.id ?? 0,
@@ -248,6 +304,7 @@ class SessionController extends Notifier<SessionState> {
           session.timerConfig.durationFor(stage),
       timeSpentSeconds: timeSpent,
       updatedAt: DateTime.now(),
+      audioFilePath: audioFilePath ?? existing?.audioFilePath,
     );
 
     state = state.copyWith(isSaving: true);

@@ -24,4 +24,8 @@ class StageNotes extends Table {
   /// Last time this row was written.
   DateTimeColumn get updatedAt =>
       dateTime().withDefault(currentDateAndTime)();
+
+  /// Path to the per-stage FLAC audio recording, if voice recording is enabled.
+  TextColumn get audioFilePath =>
+      text().nullable()();
 }

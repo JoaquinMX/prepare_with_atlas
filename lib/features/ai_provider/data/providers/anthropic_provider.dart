@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:prepare_with_atlas/features/ai_provider/domain/ai_completion_result.dart';
@@ -13,19 +14,31 @@ class AnthropicProvider implements AiProvider {
   /// Creates an [AnthropicProvider] with the given [apiKey].
   ///
   /// Optionally override the default model via [modelOverride].
+  /// Per-capability overrides ([textModelOverride], [visionModelOverride],
+  /// [audioModelOverride]) take precedence over [modelOverride] for their
+  /// respective operations.
   /// A custom [dio] instance may be injected for testing.
   AnthropicProvider({
     required String apiKey,
     String modelOverride = '',
+    String? textModelOverride,
+    String? visionModelOverride,
+    String? audioModelOverride,
     Dio? dio,
   })  : _apiKey = apiKey,
         _model = modelOverride.isNotEmpty
             ? modelOverride
             : 'claude-sonnet-4-20250514',
+        _textModel = textModelOverride ?? modelOverride,
+        _visionModel = visionModelOverride ?? modelOverride,
+        _audioModel = audioModelOverride,
         _dio = dio ?? _buildDio();
 
   final String _apiKey;
   final String _model;
+  final String _textModel;
+  final String _visionModel;
+  final String? _audioModel;
   final Dio _dio;
 
   static const _baseUrl = 'https://api.anthropic.com/v1';
@@ -48,6 +61,12 @@ class AnthropicProvider implements AiProvider {
   bool get supportsVision => true;
 
   @override
+  bool get supportsAudioTranscription => false;
+
+  @override
+  bool get supportsNativeAudio => false;
+
+  @override
   Future<AiCompletionResult> complete(
     List<AiMessage> messages,
   ) async {
@@ -59,8 +78,15 @@ class AnthropicProvider implements AiProvider {
     final systemText =
         systemMessages.map((m) => m.content).join('\n').trim();
 
+    final hasImage = nonSystemMessages.any(
+      (m) => m.imageBytes != null && m.imageBytes!.isNotEmpty,
+    );
+    final model = hasImage
+        ? (_visionModel.isNotEmpty ? _visionModel : _model)
+        : (_textModel.isNotEmpty ? _textModel : _model);
+
     final body = <String, dynamic>{
-      'model': _model,
+      'model': model,
       'max_tokens': 4096,
       'messages': nonSystemMessages.map(_messageToMap).toList(),
     };
@@ -89,7 +115,7 @@ class AnthropicProvider implements AiProvider {
       return AiCompletionResult(
         content: firstBlock['text'] as String,
         providerName: providerName,
-        modelUsed: data['model'] as String? ?? _model,
+        modelUsed: data['model'] as String? ?? model,
         promptTokens: usage['input_tokens'] as int,
         completionTokens: usage['output_tokens'] as int,
       );
@@ -104,6 +130,32 @@ class AnthropicProvider implements AiProvider {
       const AiMessage(role: 'user', content: 'Hello'),
     ]);
     return true;
+  }
+
+  @override
+  Future<String> transcribe(
+    Uint8List audioBytes, {
+    required String mimeType,
+  }) async {
+    if (_audioModel == null || _audioModel.isEmpty) {
+      throw const AiProviderException(
+        'Anthropic does not support audio transcription.',
+      );
+    }
+    throw const AiProviderException(
+      'Anthropic does not support audio transcription.',
+    );
+  }
+
+  @override
+  Future<AiCompletionResult> completeWithAudio(
+    List<AiMessage> messages,
+    Uint8List audioBytes, {
+    required String mimeType,
+  }) async {
+    throw const AiProviderException(
+      'Anthropic does not support native audio input.',
+    );
   }
 
   Map<String, dynamic> _messageToMap(AiMessage msg) {

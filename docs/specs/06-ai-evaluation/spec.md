@@ -13,6 +13,7 @@ After completing an interview session, the user's notes and whiteboard drawing a
 - **US-06.5**: As a user, I can retry evaluation if it fails (network error, timeout).
 - **US-06.6**: As a user, I can re-evaluate a past session with a different AI provider.
 - **US-06.7**: As a user, when I dictate notes while whiteboarding, my spoken words are automatically included in the AI evaluation alongside my diagram.
+- **US-06.8**: As a user, when I use voice recording mode, the FLAC audio files are transcribed and the transcript is included in the AI evaluation alongside my notes and whiteboard.
 
 ## Acceptance Criteria
 
@@ -25,11 +26,12 @@ After completing an interview session, the user's notes and whiteboard drawing a
 - [ ] "Retry" button available on evaluation failure
 - [ ] Evaluation result persists in database for history review
 - [ ] Whiteboard screenshot is included in the AI prompt as an image
+- [ ] Voice recording mode: when a session used voice recording, each stage's FLAC audio file is transcribed via the AI provider's audio transcription endpoint, and the transcript is prepended to the stage notes in the evaluation prompt
 - [ ] All tests pass
 
 ## Functional Requirements
 
-- **FR-06.1**: `EvaluationController` assembles the evaluation prompt from: problem statement, stage notes (all stages, which may include voice-dictated text), whiteboard screenshot (PNG), reference solution (if curated problem). Stage notes are the canonical input regardless of whether text was typed or dictated — the AI evaluator does not distinguish the input method.
+- **FR-06.1**: `EvaluationController` assembles the evaluation prompt from: problem statement, stage notes (all stages, which may include voice-dictated text and/or audio transcripts), whiteboard screenshot (PNG), reference solution (if curated problem). Stage notes are the canonical input regardless of whether text was typed, dictated via STT, or transcribed from FLAC recordings — the AI evaluator does not distinguish the input method.
 - **FR-06.2**: System prompt instructs AI to return JSON matching `EvaluationResult` schema with scorecard, strengths, improvements, and narrative.
 - **FR-06.3**: `EvaluationResult` model: scorecard (Map<String, int>), overallScore (int), strengths (List<String>), improvements (List<String>), narrative (String, markdown), referenceComparison (String?, only for curated).
 - **FR-06.4**: If AI response is valid JSON → parse directly. If malformed → attempt regex extraction of scores and narrative. If both fail → return error state.
@@ -46,6 +48,7 @@ After completing an interview session, the user's notes and whiteboard drawing a
   - `deepDive` → `deepDiveQuality`, `communicationClarity`, `overall`
   - `scalingAndBottlenecks` → `scalingAwareness`, `communicationClarity`, `overall`
   All dimensions not listed for the focused stage MUST be omitted from the scorecard JSON entirely. The AI must not infer or invent scores for dimensions that belong to other stages. `communicationClarity` is cross-cutting (scored in every stage). `overall` always reflects the focused stage only.
+- **FR-06.12**: Audio transcription pipeline: when a session used `voiceRecording` mode, `EvaluationController` iterates over each stage's `StageNote.audioFilePath`. For each non-null FLAC path, it calls `transcribeAudio(filePath)` on the AI provider (using `modelForAudio` if configured, falling back to `modelForText`). The returned transcript string is prepended to the stage's existing notes text (separated by a `"\n\n[Audio transcript]:\n"` header) before the stage notes are added to the evaluation prompt. Transcription failures are logged and skipped; the stage notes without transcript are still evaluated.
 
 ## Non-Functional Requirements
 
@@ -65,3 +68,5 @@ After completing an interview session, the user's notes and whiteboard drawing a
 - **EC-06.6**: Very long notes (> 20,000 chars per stage) → middle-truncate (keep first ~10,000 and last ~10,000 chars with a "[...content truncated for length...]" marker). First/last thirds are preserved to keep the user's opening plan and final trade-offs visible to the evaluator. Log a warning for the user after evaluation.
 - **EC-06.7**: Total prompt (all stages combined) risks exceeding model context window → apply EC-06.6 truncation more aggressively per-stage, or warn user and suggest switching to a larger-context model.
 - **EC-06.8**: Stage notes contain primarily dictated text with no manual edits → still evaluated normally. The evaluation prompt does not distinguish typed vs. dictated content.
+- **EC-06.9**: Audio transcription fails (provider doesn't support audio transcription, network error, corrupt FLAC file) → log error, skip that stage's audio, include the existing notes text without transcript. Do not fail the entire evaluation.
+- **EC-06.10**: FLAC audio file is not found on disk at evaluation time → log warning, skip audio transcription for that stage, include notes without transcript. This can happen if the session DB row was restored but the audio file was deleted.

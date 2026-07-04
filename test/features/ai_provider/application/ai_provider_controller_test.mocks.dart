@@ -4,6 +4,7 @@
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'dart:async' as _i4;
+import 'dart:typed_data' as _i9;
 
 import 'package:mockito/mockito.dart' as _i1;
 import 'package:mockito/src/dummies.dart' as _i7;
@@ -133,6 +134,22 @@ class MockAiProvider extends _i1.Mock implements _i6.AiProvider {
           as bool);
 
   @override
+  bool get supportsAudioTranscription =>
+      (super.noSuchMethod(
+            Invocation.getter(#supportsAudioTranscription),
+            returnValue: false,
+          )
+          as bool);
+
+  @override
+  bool get supportsNativeAudio =>
+      (super.noSuchMethod(
+            Invocation.getter(#supportsNativeAudio),
+            returnValue: false,
+          )
+          as bool);
+
+  @override
   _i4.Future<_i2.AiCompletionResult> complete(List<_i8.AiMessage>? messages) =>
       (super.noSuchMethod(
             Invocation.method(#complete, [messages]),
@@ -140,6 +157,51 @@ class MockAiProvider extends _i1.Mock implements _i6.AiProvider {
               _FakeAiCompletionResult_0(
                 this,
                 Invocation.method(#complete, [messages]),
+              ),
+            ),
+          )
+          as _i4.Future<_i2.AiCompletionResult>);
+
+  @override
+  _i4.Future<String> transcribe(
+    _i9.Uint8List? audioBytes, {
+    required String? mimeType,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#transcribe, [audioBytes], {#mimeType: mimeType}),
+            returnValue: _i4.Future<String>.value(
+              _i7.dummyValue<String>(
+                this,
+                Invocation.method(
+                  #transcribe,
+                  [audioBytes],
+                  {#mimeType: mimeType},
+                ),
+              ),
+            ),
+          )
+          as _i4.Future<String>);
+
+  @override
+  _i4.Future<_i2.AiCompletionResult> completeWithAudio(
+    List<_i8.AiMessage>? messages,
+    _i9.Uint8List? audioBytes, {
+    required String? mimeType,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(
+              #completeWithAudio,
+              [messages, audioBytes],
+              {#mimeType: mimeType},
+            ),
+            returnValue: _i4.Future<_i2.AiCompletionResult>.value(
+              _FakeAiCompletionResult_0(
+                this,
+                Invocation.method(
+                  #completeWithAudio,
+                  [messages, audioBytes],
+                  {#mimeType: mimeType},
+                ),
               ),
             ),
           )

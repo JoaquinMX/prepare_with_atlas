@@ -16,10 +16,11 @@ The core interview simulation experience. Users configure and run mock system de
 - **US-03.8**: As a user, I can abandon a session without evaluation.
 - **US-03.9**: As a user, I can dictate notes using in-app speech-to-text, even while interacting with the whiteboard panel.
 - **US-03.10**: As a user, I can see a visual indicator when dictation is active and toggle it on/off with a mic button in the notes panel.
+- **US-03.11**: As a user, I can choose a recording mode before starting — voice recording (FLAC audio + real-time STT), speech-to-text only, or notes-only.
 
 ## Acceptance Criteria
 
-- [ ] Session setup screen allows: problem selection, mode (full/single), timer behavior (soft/auto-advance/hard-stop), per-stage duration sliders
+- [ ] Session setup screen allows: problem selection, mode (full/single), timer behavior (soft/auto-advance/hard-stop), per-stage duration sliders, and recording mode (voice recording / speech-to-text / notes-only)
 - [ ] Interview workspace displays: problem title in the top bar, problem description pre-placed as a movable text element in the whiteboard at session start, stage progress bar with stage names, countdown timer, notes panel (left ~40%), whiteboard panel (right ~60%)
 - [ ] Stage progress bar highlights current stage and shows completed stages
 - [ ] Timer counts down and displays in MM:SS format (JetBrains Mono font)
@@ -34,6 +35,9 @@ The core interview simulation experience. Users configure and run mock system de
 - [ ] Dictation works regardless of which panel (notes or whiteboard) has focus
 - [ ] Dictation state persists across stage transitions (in-flight dictation is finalised and saved before advancing)
 - [ ] Microphone permission request shown on first use; denial handled gracefully with info message
+- [ ] Session setup screen includes a Recording Mode selector with three options: "Voice Recording" (FLAC audio capture + real-time STT display), "Speech to Text" (STT only, no audio file), "Notes Only" (no audio capture, no STT)
+- [ ] In voice recording mode, audio recording starts automatically when a stage begins and stops automatically on stage transition or session end; a red pulse indicator in the notes panel header signals that recording is active
+- [ ] In notes-only mode, the mic button is hidden from the StageNotesPanel
 - [ ] **NO reference sidebar, topics list, techniques list, or key insights are shown during the interview** — only the problem statement, stage name, timer, notes field, and whiteboard
 - [ ] Pause button freezes timer; resume continues
 - [ ] "End Session" button saves all data and navigates to evaluation (Spec 06)
@@ -45,7 +49,7 @@ The core interview simulation experience. Users configure and run mock system de
 
 - **FR-03.1**: `InterviewStage` enum with 5 values, each carrying **only**: display name and default duration (min/max/default). No topics, techniques, technologies, or key insights — the CSV's additional columns are not used in the UI.
 - **FR-03.2**: `InterviewSession` model: id, problemId, mode (full/single_stage), focusStage (nullable), timerBehavior, status (in_progress/completed/abandoned), timestamps.
-- **FR-03.3**: `StageNote` model: id, sessionId, stage, notes text, timerDurationSeconds, timeSpentSeconds, updatedAt.
+- **FR-03.3**: `StageNote` model: id, sessionId, stage, notes text, timerDurationSeconds, timeSpentSeconds, updatedAt, audioFilePath (nullable, present when voice recording is used).
 - **FR-03.4**: `SessionController` orchestrates: session creation, stage transitions, notes saving, session completion/abandonment.
 - **FR-03.5**: `StageTimerController` manages countdown with state machine (Idle → Running → Warning → GracePeriod/Overtime/StageEnded).
 - **FR-03.6**: In full mode, completing a stage auto-loads the next stage's timer and clears the notes panel (previous notes preserved in DB).
@@ -54,6 +58,9 @@ The core interview simulation experience. Users configure and run mock system de
 - **FR-03.9**: `DictationController` manages `SpeechToText` lifecycle: `startListening()`, `stopListening()`, `toggleListening()`. Recognized text is appended to the active stage's notes at the cursor position. The controller is scoped to the interview session and survives stage transitions.
 - **FR-03.10**: `StageNotesPanel` renders a mic toggle button in its header. When dictation is active the button shows an accent-coloured icon with a subtle pulse animation. The previous "Fn Fn to dictate" tooltip is replaced with a "Tap mic to dictate" tooltip on the button. Dictation works regardless of which panel (notes or whiteboard) has focus.
 - **FR-03.11**: Dictation transcript is stored as part of `StageNote.notes` text (interleaved with typed text, not stored separately). The notes field is the canonical input for AI evaluation whether the text was typed or dictated.
+- **FR-03.12**: `RecordingMode` enum with three values: `voiceRecording` (FLAC audio capture at 16kHz mono + real-time STT), `speechToText` (STT only, no audio file), `notesOnly` (no audio, no STT). Selected at session start via `SessionSetupScreen` and stored in `SessionState.recordingMode`.
+- **FR-03.13**: `AudioRecorderController` manages per-stage FLAC recording: `startRecording(sessionId, stageIndex)` creates `{applicationDocumentsDirectory}/recordings/session_{sessionId}_stage{stageIndex}_{timestamp}.flac`; `stopRecording()` finalises and returns the path; `cancelRecording()` discards without saving. Recording state is exposed via `audioRecorderProvider`. `SessionController` calls `startRecording` when entering a stage (if mode is `voiceRecording`) and `stopRecording` on stage transition or session end.
+- **FR-03.14**: `audioFilePath` is saved to the `StageNotes` row at the same time as notes text, on stage transition and session end.
 
 ## Non-Functional Requirements
 
@@ -77,3 +84,6 @@ The core interview simulation experience. Users configure and run mock system de
 - **EC-03.9**: No speech detected for 5 seconds (pauseFor silence timeout) → automatically restart listening. The microphone stays open; the user does not need to re-tap the mic button after a pause in speech.
 - **EC-03.10**: Stage transition while dictation is active → stop listening, save current notes, then advance. Do not lose in-flight dictation.
 - **EC-03.11**: Very fast speech → partial results replace previous partial result at cursor until final result is confirmed.
+- **EC-03.12**: User switches from voice-recording mode to another mode mid-session → not possible; recording mode is locked at session start. Abandoning and restarting with a different mode is the correct path.
+- **EC-03.13**: Audio recording fails (permission denied, disk full) → `AudioRecorderController` transitions to `AudioRecorderError` state; session continues without audio. The error is logged but does not interrupt the interview.
+- **EC-03.14**: App crashes during active voice recording → FLAC file is not finalized (partial file on disk). On next launch, no recovery is attempted; session is abandoned. No orphan recording files accumulate because they are only moved/renamed on `stopRecording()`.

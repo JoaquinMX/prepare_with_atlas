@@ -23,6 +23,8 @@ dependencies:
   intl: ^0.20.2
   json_annotation: ^4.9.0
   logger: ^2.5.0
+  path_provider: ^2.1.5
+  record: ^5.2.0
   riverpod_annotation: ^3.0.0
   shared_preferences: ^2.3.4
   speech_to_text: ^7.0.0
@@ -51,3 +53,8 @@ flutter:
   assets:
     - assets/problems/curated_problems.json
     - assets/excalidraw/
+
+dependency_overrides:
+  # record_linux 0.7.2 is incompatible with record_platform_interface 1.5.0
+  # (missing startStream). Override to a version that implements the interface.
+  record_linux: ^1.0.0

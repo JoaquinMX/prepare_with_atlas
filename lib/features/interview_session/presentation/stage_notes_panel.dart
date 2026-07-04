@@ -4,6 +4,8 @@ import 'package:prepare_with_atlas/core/theme/atlas_colors.dart';
 import 'package:prepare_with_atlas/features/interview_session/application/dictation_controller.dart';
 import 'package:prepare_with_atlas/features/interview_session/application/dictation_state.dart';
 import 'package:prepare_with_atlas/features/interview_session/application/session_providers.dart';
+import 'package:prepare_with_atlas/features/recording/application/audio_recorder_controller.dart';
+import 'package:prepare_with_atlas/features/recording/application/audio_recorder_state.dart';
 
 /// A panel for free-form notes during an interview stage.
 ///
@@ -102,6 +104,11 @@ class _StageNotesPanelState extends ConsumerState<StageNotesPanel> {
       DictationError(:final message) => message,
       _ => null,
     };
+    final sessionState = ref.watch(sessionControllerProvider);
+    final recordingMode = sessionState.recordingMode;
+    final isVoiceRecording = recordingMode == RecordingMode.voiceRecording;
+    final recorderState = ref.watch(audioRecorderProvider);
+    final isRecording = recorderState is AudioRecorderRecording;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -119,6 +126,8 @@ class _StageNotesPanelState extends ConsumerState<StageNotesPanel> {
                   fontWeight: FontWeight.w600,
                 ),
               ),
+              const SizedBox(width: 8),
+              _ModeIndicator(mode: recordingMode, isRecording: isRecording),
               const Spacer(),
               if (errorMessage != null)
                 Tooltip(
@@ -141,6 +150,8 @@ class _StageNotesPanelState extends ConsumerState<StageNotesPanel> {
                     ],
                   ),
                 )
+              else if (recordingMode == RecordingMode.notesOnly)
+                const SizedBox.shrink()
               else
                 Tooltip(
                   message: isListening
@@ -273,4 +284,57 @@ class _RecordingPulseState extends State<_RecordingPulse>
       ),
     );
   }
+}
+
+/// Shows a small badge indicating the current recording mode.
+class _ModeIndicator extends StatelessWidget {
+  const _ModeIndicator({required this.mode, required this.isRecording});
+
+  final RecordingMode mode;
+  final bool isRecording;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (isRecording) ...[
+          Container(
+            width: 6,
+            height: 6,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              color: AtlasColors.danger,
+            ),
+          ),
+          const SizedBox(width: 4),
+        ],
+        Icon(
+          _icon(mode),
+          size: 12,
+          color: AtlasColors.textMuted,
+        ),
+        const SizedBox(width: 3),
+        Text(
+          _label(mode),
+          style: const TextStyle(
+            color: AtlasColors.textMuted,
+            fontSize: 11,
+          ),
+        ),
+      ],
+    );
+  }
+
+  IconData _icon(RecordingMode m) => switch (m) {
+        RecordingMode.voiceRecording => Icons.mic,
+        RecordingMode.speechToText => Icons.record_voice_over_outlined,
+        RecordingMode.notesOnly => Icons.note_outlined,
+      };
+
+  String _label(RecordingMode m) => switch (m) {
+        RecordingMode.voiceRecording => 'REC',
+        RecordingMode.speechToText => 'STT',
+        RecordingMode.notesOnly => 'Notes',
+      };
 }

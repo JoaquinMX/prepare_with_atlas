@@ -12,6 +12,7 @@ A pluggable AI provider system that lets users connect to their preferred AI ser
 - **US-05.4**: As a user, I can test my AI connection to verify it works before starting an interview.
 - **US-05.5**: As a user, I can switch between configured providers.
 - **US-05.6**: As a user, my API keys are stored securely and not visible in plain text.
+- **US-05.7**: As a user, I can configure separate models for text evaluation, vision (diagrams), and audio transcription — allowing me to use a fast/cheap model for transcription while using a more capable model for full evaluation.
 
 ## Acceptance Criteria
 
@@ -26,12 +27,12 @@ A pluggable AI provider system that lets users connect to their preferred AI ser
 - [ ] Only one provider is active at a time; switching deactivates the previous one
 - [ ] API keys are encrypted in the database using macOS Keychain-backed encryption
 - [ ] Each provider correctly translates prompts to its API format (including multimodal image support)
-- [ ] OAuth tokens auto-refresh before expiration
+- [ ] AI Settings screen shows model dropdowns for each capability: "Model for text evaluation", "Model for vision (diagrams)", "Model for audio transcription" — each populated by the model's discovery flow; defaults are pre-selected
 - [ ] All tests pass
 
 ## Functional Requirements
 
-- **FR-05.1**: `AIProvider` abstract class with methods: `complete(systemPrompt, userPrompt, imageBytes?, imageMimeType?)`, `testConnection()`, `providerName` getter.
+- **FR-05.1**: `AIProvider` abstract class with methods: `complete(systemPrompt, userPrompt, imageBytes?, imageMimeType?)`, `testConnection()`, `providerName` getter, `currentModel` getter, `supportsVision` getter, `supportsAudioTranscription` getter, `supportsNativeAudio` getter.
 - **FR-05.2**: `AIProviderConfig` sealed union with variants: `ApiKeyConfig`, `OAuthConfig`, `OllamaConfig`.
 - **FR-05.3**: Provider implementations translate to each API's format:
   - OpenAI: `POST /v1/chat/completions` with `gpt-4o` default
@@ -48,7 +49,8 @@ A pluggable AI provider system that lets users connect to their preferred AI ser
 - **FR-05.10**: Ollama unreachable state: if the Ollama server cannot be reached at the configured URL, show a distinct error state ("Cannot reach Ollama at {url}. Is it running?") — separate from the empty-models state. The user can correct the URL and try again.
 - **FR-05.11**: `OllamaProvider.fetchModels(baseUrl, {Dio? dio})` is a static method that queries `/api/tags` and returns `List<String>` of model names. Throws `AiProviderException` on connection errors. `AiProviderController.fetchOllamaModels(baseUrl)` delegates to it.
 - **FR-05.12**: Gemini model discovery: when the Gemini provider is selected in AI Settings, the user taps "Load available models" to call the Gemini REST API (`GET /v1beta/models?key=...`), filtered to models supporting `generateContent`. The resulting list populates a dropdown; the "Save & Test Connection" button is disabled until a model is selected.
-- **FR-05.13**: `GeminiProvider.fetchModels(apiKey, {Dio? dio})` is a static method that queries `GET /v1beta/models?key=apiKey`, filters by `supportedGenerationMethods.contains("generateContent")`, strips the `"models/"` prefix, and returns `List<String>`. Throws `AiProviderException` on HTTP or connectivity errors. `AiProviderController.fetchGeminiModels(apiKey)` delegates to it.
+- **FR-05.13**: `GeminiProvider.fetchModels(apiKey, {Dio? dio})` is a static method that queries `GET /v1beta/models?key=apiKey`, filters by `supportedGenerationMethods.contains("generateContent")`, strips the `"models/"` prefix, and returns `List<String>`. Throws `AiProviderException` on HTTP or connectivity errors. `GeminiProvider.fetchModels` (used by the controller) delegates to it.
+- **FR-05.14**: Multi-capability model routing: each AI call site specifies a `Capability` (`text`, `vision`, or `audio`) rather than a provider name. `EvaluationController` resolves the best available model for each capability from the active provider config: text → `modelForText`, vision → `modelForVision`, audio transcription → `modelForAudio`. If no separate model is configured for a capability, the default model is used. This allows e.g. using Haiku for fast transcription while using Sonnet for full evaluation.
 
 ## Non-Functional Requirements
 

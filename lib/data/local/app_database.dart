@@ -30,7 +30,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -50,6 +50,10 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(aiProviderConfigs);
             // Spec 06 — AI Evaluation
             await m.createTable(evaluations);
+          }
+          if (from < 7) {
+            // Add audioFilePath column to stage_notes for voice recording.
+            await m.addColumn(stageNotes, stageNotes.audioFilePath);
           }
         },
       );

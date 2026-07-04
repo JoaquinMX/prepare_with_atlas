@@ -29,6 +29,9 @@ abstract class StageNote with _$StageNote {
 
     /// Seconds spent on this stage.
     @Default(0) int timeSpentSeconds,
+
+    /// Path to the per-stage FLAC audio recording, if voice recording is enabled.
+    @Default(null) String? audioFilePath,
   }) = _StageNote;
 
   const StageNote._();

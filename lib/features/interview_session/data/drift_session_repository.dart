@@ -179,6 +179,7 @@ class DriftSessionRepository implements SessionRepository {
         timerDurationSeconds: Value(n.timerDurationSeconds),
         timeSpentSeconds: Value(n.timeSpentSeconds),
         updatedAt: Value(n.updatedAt),
+        audioFilePath: Value(n.audioFilePath),
       );
 
   domain.StageNote _toNoteDomain(db.StageNote row) => domain.StageNote(
@@ -189,5 +190,6 @@ class DriftSessionRepository implements SessionRepository {
         timerDurationSeconds: row.timerDurationSeconds,
         timeSpentSeconds: row.timeSpentSeconds,
         updatedAt: row.updatedAt,
+        audioFilePath: row.audioFilePath,
       );
 }

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:prepare_with_atlas/features/ai_provider/domain/ai_completion_result.dart';
@@ -13,18 +14,30 @@ class OpenAiProvider implements AiProvider {
   /// Creates an [OpenAiProvider] with the given [apiKey].
   ///
   /// Optionally override the default model via [modelOverride].
+  /// Per-capability overrides ([textModelOverride], [visionModelOverride],
+  /// [audioModelOverride]) take precedence over [modelOverride] for their
+  /// respective operations.
   /// A custom [dio] instance may be injected for testing.
   OpenAiProvider({
     required String apiKey,
     String modelOverride = '',
+    String? textModelOverride,
+    String? visionModelOverride,
+    String? audioModelOverride,
     Dio? dio,
   })  : _apiKey = apiKey,
         _model =
             modelOverride.isNotEmpty ? modelOverride : 'gpt-4o',
+        _textModel = textModelOverride ?? modelOverride,
+        _visionModel = visionModelOverride ?? modelOverride,
+        _audioModel = audioModelOverride ?? 'whisper-1',
         _dio = dio ?? _buildDio();
 
   final String _apiKey;
   final String _model;
+  final String _textModel;
+  final String _visionModel;
+  final String _audioModel;
   final Dio _dio;
 
   static const _baseUrl = 'https://api.openai.com/v1';
@@ -46,11 +59,24 @@ class OpenAiProvider implements AiProvider {
   bool get supportsVision => true;
 
   @override
+  bool get supportsAudioTranscription => true;
+
+  @override
+  bool get supportsNativeAudio => false;
+
+  @override
   Future<AiCompletionResult> complete(
     List<AiMessage> messages,
   ) async {
+    final hasImage = messages.any(
+      (m) => m.imageBytes != null && m.imageBytes!.isNotEmpty,
+    );
+    final model = hasImage
+        ? (_visionModel.isNotEmpty ? _visionModel : _model)
+        : (_textModel.isNotEmpty ? _textModel : _model);
+
     final body = {
-      'model': _model,
+      'model': model,
       'messages': messages.map(_messageToMap).toList(),
       'max_tokens': 4096,
     };
@@ -76,7 +102,7 @@ class OpenAiProvider implements AiProvider {
       return AiCompletionResult(
         content: msgContent['content'] as String,
         providerName: providerName,
-        modelUsed: data['model'] as String? ?? _model,
+        modelUsed: data['model'] as String? ?? model,
         promptTokens: usage['prompt_tokens'] as int,
         completionTokens: usage['completion_tokens'] as int,
       );
@@ -91,6 +117,47 @@ class OpenAiProvider implements AiProvider {
       const AiMessage(role: 'user', content: 'Hello'),
     ]);
     return true;
+  }
+
+  @override
+  Future<String> transcribe(
+    Uint8List audioBytes, {
+    required String mimeType,
+  }) async {
+    final formData = FormData.fromMap({
+      'file': MultipartFile.fromBytes(
+        audioBytes,
+        filename: 'audio.flac',
+        contentType: DioMediaType.parse(mimeType),
+      ),
+      'model': _audioModel,
+    });
+
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '$_baseUrl/audio/transcriptions',
+        data: formData,
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $_apiKey',
+          },
+        ),
+      );
+      return (response.data!['text'] as String?) ?? '';
+    } on DioException catch (e) {
+      throw _mapError(e);
+    }
+  }
+
+  @override
+  Future<AiCompletionResult> completeWithAudio(
+    List<AiMessage> messages,
+    Uint8List audioBytes, {
+    required String mimeType,
+  }) async {
+    throw AiProviderException(
+      'OpenAI does not support native audio input in chat completions.',
+    );
   }
 
   Map<String, dynamic> _messageToMap(AiMessage msg) {

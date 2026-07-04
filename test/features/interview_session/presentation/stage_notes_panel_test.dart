@@ -18,6 +18,8 @@ import 'package:prepare_with_atlas/features/problem_bank/application/problem_rep
 import 'package:prepare_with_atlas/features/problem_bank/domain/experience_level.dart';
 import 'package:prepare_with_atlas/features/problem_bank/domain/problem.dart';
 import 'package:prepare_with_atlas/features/problem_bank/domain/problem_repository.dart';
+import 'package:prepare_with_atlas/features/recording/application/audio_recorder_controller.dart';
+import 'package:prepare_with_atlas/features/recording/application/audio_recorder_state.dart';
 
 class _FakeDictationController extends DictationController {
   @override
@@ -51,6 +53,7 @@ class _FakeSessionController extends SessionController {
       startedAt: DateTime(2026, 4, 9),
     ),
     currentStage: InterviewStage.requirementGathering,
+    recordingMode: RecordingMode.speechToText,
   );
 
   @override
@@ -67,6 +70,11 @@ class _FakeTimerController extends StageTimerController {
     remainingSeconds: 420,
     totalSeconds: 420,
   );
+}
+
+class _FakeAudioRecorderController extends AudioRecorderController {
+  @override
+  AudioRecorderState build() => const AudioRecorderState.idle();
 }
 
 class _FakeRepo extends Fake implements SessionRepository {}
@@ -98,6 +106,7 @@ void main() {
         sessionControllerProvider.overrideWith(_FakeSessionController.new),
         stageTimerControllerProvider.overrideWith(_FakeTimerController.new),
         dictationControllerProvider.overrideWith(_FakeDictationController.new),
+        audioRecorderProvider.overrideWith(_FakeAudioRecorderController.new),
       ],
       child: const MaterialApp(home: Scaffold(body: StageNotesPanel())),
     );

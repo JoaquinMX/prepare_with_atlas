@@ -256,34 +256,67 @@ class AiProviderController extends Notifier<AiProviderState> {
           :final providerName,
           :final apiKey,
           :final modelOverride,
+          :final textModelOverride,
+          :final visionModelOverride,
+          :final audioModelOverride,
         ) =>
           switch (providerName) {
             'anthropic' => AnthropicProvider(
                 apiKey: apiKey,
                 modelOverride: modelOverride,
+                textModelOverride: textModelOverride,
+                visionModelOverride: visionModelOverride,
+                audioModelOverride: audioModelOverride,
               ),
             'gemini' => GeminiProvider(
                 apiKey: apiKey,
                 modelOverride: modelOverride,
+                textModelOverride: textModelOverride,
+                visionModelOverride: visionModelOverride,
+                audioModelOverride: audioModelOverride,
               ),
             'openrouter' => OpenRouterProvider(
                 apiKey: apiKey,
                 modelOverride: modelOverride,
+                textModelOverride: textModelOverride,
+                visionModelOverride: visionModelOverride,
+                audioModelOverride: audioModelOverride,
               ),
             _ => OpenAiProvider(
                 apiKey: apiKey,
                 modelOverride: modelOverride,
+                textModelOverride: textModelOverride,
+                visionModelOverride: visionModelOverride,
+                audioModelOverride: audioModelOverride,
               ),
           },
-        OAuthConfig(:final accessToken, :final modelOverride) =>
+        OAuthConfig(
+          :final accessToken,
+          :final modelOverride,
+          :final textModelOverride,
+          :final visionModelOverride,
+          :final audioModelOverride,
+        ) =>
           OpenAiProvider(
             apiKey: accessToken,
             modelOverride: modelOverride,
+            textModelOverride: textModelOverride,
+            visionModelOverride: visionModelOverride,
+            audioModelOverride: audioModelOverride,
           ),
-        OllamaConfig(:final baseUrl, :final modelName) =>
+        OllamaConfig(
+          :final baseUrl,
+          :final modelName,
+          :final textModelOverride,
+          :final visionModelOverride,
+          :final audioModelOverride,
+        ) =>
           OllamaProvider(
             modelName: modelName,
             baseUrl: baseUrl,
+            textModelOverride: textModelOverride,
+            visionModelOverride: visionModelOverride,
+            audioModelOverride: audioModelOverride,
           ),
       };
 

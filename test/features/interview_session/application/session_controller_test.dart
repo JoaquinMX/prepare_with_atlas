@@ -9,6 +9,8 @@ import 'package:prepare_with_atlas/features/interview_session/domain/session_rep
 import 'package:prepare_with_atlas/features/interview_session/domain/stage_note.dart';
 import 'package:prepare_with_atlas/features/interview_session/domain/timer_behavior.dart';
 import 'package:prepare_with_atlas/features/interview_session/domain/timer_config.dart';
+import 'package:prepare_with_atlas/features/recording/application/audio_recorder_controller.dart';
+import 'package:prepare_with_atlas/features/recording/application/audio_recorder_state.dart';
 
 import 'session_controller_test.mocks.dart';
 
@@ -50,6 +52,10 @@ void main() {
     container = ProviderContainer(
       overrides: [
         sessionRepositoryProvider.overrideWithValue(mockRepo),
+        // Use a fake audio recorder that stays idle (notesOnly mode in tests).
+        audioRecorderProvider.overrideWith(
+          () => _FakeAudioRecorderController(),
+        ),
       ],
     );
   });
@@ -63,6 +69,7 @@ void main() {
         problemId: 42,
         behavior: TimerBehavior.softWarning,
         config: const TimerConfig(),
+        recordingMode: RecordingMode.notesOnly,
       );
       final state = container.read(sessionControllerProvider);
       expect(state.currentSession, isNotNull);
@@ -86,6 +93,7 @@ void main() {
         stage: chosenStage,
         behavior: TimerBehavior.softWarning,
         config: const TimerConfig(),
+        recordingMode: RecordingMode.notesOnly,
       );
       final state = container.read(sessionControllerProvider);
       expect(state.currentSession, isNotNull);
@@ -107,6 +115,7 @@ void main() {
         stage: chosenStage,
         behavior: TimerBehavior.softWarning,
         config: const TimerConfig(),
+        recordingMode: RecordingMode.notesOnly,
       );
       final captured = verify(mockRepo.create(captureAny)).captured.first
           as InterviewSession;
@@ -120,6 +129,7 @@ void main() {
         problemId: 42,
         behavior: TimerBehavior.softWarning,
         config: const TimerConfig(),
+        recordingMode: RecordingMode.notesOnly,
       );
       await notifier.advanceToNextStage();
       final state = container.read(sessionControllerProvider);
@@ -144,6 +154,7 @@ void main() {
         stage: chosenStage,
         behavior: TimerBehavior.softWarning,
         config: const TimerConfig(),
+        recordingMode: RecordingMode.notesOnly,
       );
       await notifier.advanceToNextStage();
       final state = container.read(sessionControllerProvider);
@@ -156,6 +167,7 @@ void main() {
         problemId: 42,
         behavior: TimerBehavior.softWarning,
         config: const TimerConfig(),
+        recordingMode: RecordingMode.notesOnly,
       );
       when(mockRepo.update(any)).thenAnswer((_) async {});
       await notifier.endSession();
@@ -172,6 +184,7 @@ void main() {
         problemId: 42,
         behavior: TimerBehavior.softWarning,
         config: const TimerConfig(),
+        recordingMode: RecordingMode.notesOnly,
       );
       when(mockRepo.update(any)).thenAnswer((_) async {});
       await notifier.abandonSession();
@@ -182,4 +195,11 @@ void main() {
       );
     });
   });
+}
+
+/// A fake [AudioRecorderController] that stays in idle state.
+class _FakeAudioRecorderController
+    extends AudioRecorderController {
+  @override
+  AudioRecorderState build() => const AudioRecorderState.idle();
 }

@@ -9,6 +9,7 @@ import 'package:prepare_with_atlas/core/theme/atlas_colors.dart';
 import 'package:prepare_with_atlas/features/evaluation/application/evaluation_providers.dart';
 import 'package:prepare_with_atlas/features/interview_session/application/dictation_controller.dart';
 import 'package:prepare_with_atlas/features/interview_session/application/session_providers.dart';
+import 'package:prepare_with_atlas/features/recording/application/audio_recorder_state.dart';
 import 'package:prepare_with_atlas/features/interview_session/application/timer_state.dart';
 import 'package:prepare_with_atlas/features/interview_session/domain/interview_stage.dart';
 import 'package:prepare_with_atlas/features/interview_session/presentation/stage_notes_panel.dart';
@@ -261,6 +262,8 @@ class _InterviewScreenState extends ConsumerState<InterviewScreen> {
           problem: problem,
           notes: notes,
           whiteboardScreenshot: screenshot,
+          voiceRecordingEnabled:
+              sessionState.recordingMode == RecordingMode.voiceRecording,
         ),
       );
     }

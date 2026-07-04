@@ -9,6 +9,7 @@ import 'package:prepare_with_atlas/features/interview_session/domain/interview_s
 import 'package:prepare_with_atlas/features/interview_session/domain/interview_stage.dart';
 import 'package:prepare_with_atlas/features/interview_session/domain/timer_behavior.dart';
 import 'package:prepare_with_atlas/features/interview_session/domain/timer_config.dart';
+import 'package:prepare_with_atlas/features/recording/application/audio_recorder_state.dart';
 
 /// Screen for configuring and starting an interview session.
 ///
@@ -29,6 +30,7 @@ class _SessionSetupScreenState extends ConsumerState<SessionSetupScreen> {
   SessionMode _mode = SessionMode.full;
   InterviewStage? _focusStage;
   TimerBehavior _behavior = TimerBehavior.softWarning;
+  RecordingMode _recordingMode = RecordingMode.notesOnly;
   final Map<String, int> _durationOverrides = {};
 
   bool get _canBegin =>
@@ -156,6 +158,24 @@ class _SessionSetupScreenState extends ConsumerState<SessionSetupScreen> {
                     },
                   ),
                 ),
+                const SizedBox(height: 24),
+                // Recording mode
+                const Text(
+                  'Recording Mode',
+                  style: TextStyle(
+                    color: AtlasColors.textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ...RecordingMode.values.map(
+                  (m) => _RecordingModeCard(
+                    mode: m,
+                    isSelected: _recordingMode == m,
+                    onTap: () => setState(() => _recordingMode = m),
+                  ),
+                ),
                 const SizedBox(height: 32),
                 // Action buttons
                 Row(
@@ -219,12 +239,14 @@ class _SessionSetupScreenState extends ConsumerState<SessionSetupScreen> {
         stage: _focusStage!,
         behavior: _behavior,
         config: config,
+        recordingMode: _recordingMode,
       );
     } else {
       await notifier.startFullSession(
         problemId: widget.problemId,
         behavior: _behavior,
         config: config,
+        recordingMode: _recordingMode,
       );
     }
 
@@ -487,4 +509,87 @@ class _StageDurationSlider extends StatelessWidget {
       ),
     );
   }
+}
+
+class _RecordingModeCard extends StatelessWidget {
+  const _RecordingModeCard({
+    required this.mode,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final RecordingMode mode;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AtlasColors.accent.withAlpha(30)
+              : AtlasColors.surface,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: isSelected ? AtlasColors.accent : AtlasColors.border,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              isSelected
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_unchecked,
+              color: isSelected ? AtlasColors.accent : AtlasColors.border,
+              size: 20,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _label(mode),
+                    style: TextStyle(
+                      color: isSelected
+                          ? AtlasColors.textPrimary
+                          : AtlasColors.textSecondary,
+                      fontWeight: isSelected
+                          ? FontWeight.w600
+                          : FontWeight.normal,
+                    ),
+                  ),
+                  Text(
+                    _subtitle(mode),
+                    style: const TextStyle(
+                      color: AtlasColors.textMuted,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _label(RecordingMode m) => switch (m) {
+        RecordingMode.voiceRecording => 'Voice Recording',
+        RecordingMode.speechToText => 'Speech to Text',
+        RecordingMode.notesOnly => 'Notes Only',
+      };
+
+  String _subtitle(RecordingMode m) => switch (m) {
+        RecordingMode.voiceRecording =>
+          'Records FLAC audio with live STT display',
+        RecordingMode.speechToText =>
+          'Real-time transcription into notes',
+        RecordingMode.notesOnly => 'No audio capture',
+      };
 }

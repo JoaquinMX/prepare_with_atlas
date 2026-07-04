@@ -16,6 +16,12 @@ sealed class AiProviderConfig with _$AiProviderConfig {
 
     /// Optional model override; empty string means use provider default.
     @Default('') String modelOverride,
+
+    /// Per-capability model override for multi-model evaluation.
+    /// Format: 'providerName:modelName' (e.g., 'openai:gpt-4o').
+    @Default(null) String? visionModelOverride,
+    @Default(null) String? audioModelOverride,
+    @Default(null) String? textModelOverride,
   }) = ApiKeyConfig;
 
   /// OAuth 2.1/PKCE based authentication (OpenAI only).
@@ -34,6 +40,11 @@ sealed class AiProviderConfig with _$AiProviderConfig {
 
     /// Optional model override; empty string means use provider default.
     @Default('') String modelOverride,
+
+    /// Per-capability model override for multi-model evaluation.
+    @Default(null) String? visionModelOverride,
+    @Default(null) String? audioModelOverride,
+    @Default(null) String? textModelOverride,
   }) = OAuthConfig;
 
   /// Local Ollama configuration.
@@ -43,6 +54,11 @@ sealed class AiProviderConfig with _$AiProviderConfig {
 
     /// The base URL of the local Ollama server.
     @Default('http://localhost:11434') String baseUrl,
+
+    /// Per-capability model override for multi-model evaluation.
+    @Default(null) String? visionModelOverride,
+    @Default(null) String? audioModelOverride,
+    @Default(null) String? textModelOverride,
   }) = OllamaConfig;
 
   /// Deserializes an [AiProviderConfig] from [json].

@@ -4,6 +4,7 @@
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'dart:async' as _i5;
+import 'dart:typed_data' as _i7;
 
 import 'package:mockito/mockito.dart' as _i1;
 import 'package:mockito/src/dummies.dart' as _i4;
@@ -14,9 +15,9 @@ import 'package:prepare_with_atlas/features/ai_provider/domain/ai_message.dart'
 import 'package:prepare_with_atlas/features/ai_provider/domain/ai_provider.dart'
     as _i3;
 import 'package:prepare_with_atlas/features/evaluation/domain/evaluation_repository.dart'
-    as _i7;
-import 'package:prepare_with_atlas/features/evaluation/domain/evaluation_result.dart'
     as _i8;
+import 'package:prepare_with_atlas/features/evaluation/domain/evaluation_result.dart'
+    as _i9;
 
 // ignore_for_file: type=lint
 // ignore_for_file: avoid_redundant_argument_values
@@ -78,6 +79,22 @@ class MockAiProvider extends _i1.Mock implements _i3.AiProvider {
           as bool);
 
   @override
+  bool get supportsAudioTranscription =>
+      (super.noSuchMethod(
+            Invocation.getter(#supportsAudioTranscription),
+            returnValue: false,
+          )
+          as bool);
+
+  @override
+  bool get supportsNativeAudio =>
+      (super.noSuchMethod(
+            Invocation.getter(#supportsNativeAudio),
+            returnValue: false,
+          )
+          as bool);
+
+  @override
   _i5.Future<_i2.AiCompletionResult> complete(List<_i6.AiMessage>? messages) =>
       (super.noSuchMethod(
             Invocation.method(#complete, [messages]),
@@ -85,6 +102,51 @@ class MockAiProvider extends _i1.Mock implements _i3.AiProvider {
               _FakeAiCompletionResult_0(
                 this,
                 Invocation.method(#complete, [messages]),
+              ),
+            ),
+          )
+          as _i5.Future<_i2.AiCompletionResult>);
+
+  @override
+  _i5.Future<String> transcribe(
+    _i7.Uint8List? audioBytes, {
+    required String? mimeType,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#transcribe, [audioBytes], {#mimeType: mimeType}),
+            returnValue: _i5.Future<String>.value(
+              _i4.dummyValue<String>(
+                this,
+                Invocation.method(
+                  #transcribe,
+                  [audioBytes],
+                  {#mimeType: mimeType},
+                ),
+              ),
+            ),
+          )
+          as _i5.Future<String>);
+
+  @override
+  _i5.Future<_i2.AiCompletionResult> completeWithAudio(
+    List<_i6.AiMessage>? messages,
+    _i7.Uint8List? audioBytes, {
+    required String? mimeType,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(
+              #completeWithAudio,
+              [messages, audioBytes],
+              {#mimeType: mimeType},
+            ),
+            returnValue: _i5.Future<_i2.AiCompletionResult>.value(
+              _FakeAiCompletionResult_0(
+                this,
+                Invocation.method(
+                  #completeWithAudio,
+                  [messages, audioBytes],
+                  {#mimeType: mimeType},
+                ),
               ),
             ),
           )
@@ -103,13 +165,13 @@ class MockAiProvider extends _i1.Mock implements _i3.AiProvider {
 ///
 /// See the documentation for Mockito's code generation for more information.
 class MockEvaluationRepository extends _i1.Mock
-    implements _i7.EvaluationRepository {
+    implements _i8.EvaluationRepository {
   MockEvaluationRepository() {
     _i1.throwOnMissingStub(this);
   }
 
   @override
-  _i5.Future<void> save(_i8.EvaluationResult? evaluation) =>
+  _i5.Future<void> save(_i9.EvaluationResult? evaluation) =>
       (super.noSuchMethod(
             Invocation.method(#save, [evaluation]),
             returnValue: _i5.Future<void>.value(),
@@ -118,32 +180,32 @@ class MockEvaluationRepository extends _i1.Mock
           as _i5.Future<void>);
 
   @override
-  _i5.Future<_i8.EvaluationResult?> getBySessionId(String? sessionId) =>
+  _i5.Future<_i9.EvaluationResult?> getBySessionId(String? sessionId) =>
       (super.noSuchMethod(
             Invocation.method(#getBySessionId, [sessionId]),
-            returnValue: _i5.Future<_i8.EvaluationResult?>.value(),
+            returnValue: _i5.Future<_i9.EvaluationResult?>.value(),
           )
-          as _i5.Future<_i8.EvaluationResult?>);
+          as _i5.Future<_i9.EvaluationResult?>);
 
   @override
-  _i5.Future<List<_i8.EvaluationResult>> getAllBySessionId(String? sessionId) =>
+  _i5.Future<List<_i9.EvaluationResult>> getAllBySessionId(String? sessionId) =>
       (super.noSuchMethod(
             Invocation.method(#getAllBySessionId, [sessionId]),
-            returnValue: _i5.Future<List<_i8.EvaluationResult>>.value(
-              <_i8.EvaluationResult>[],
+            returnValue: _i5.Future<List<_i9.EvaluationResult>>.value(
+              <_i9.EvaluationResult>[],
             ),
           )
-          as _i5.Future<List<_i8.EvaluationResult>>);
+          as _i5.Future<List<_i9.EvaluationResult>>);
 
   @override
-  _i5.Future<List<_i8.EvaluationResult>> getAll() =>
+  _i5.Future<List<_i9.EvaluationResult>> getAll() =>
       (super.noSuchMethod(
             Invocation.method(#getAll, []),
-            returnValue: _i5.Future<List<_i8.EvaluationResult>>.value(
-              <_i8.EvaluationResult>[],
+            returnValue: _i5.Future<List<_i9.EvaluationResult>>.value(
+              <_i9.EvaluationResult>[],
             ),
           )
-          as _i5.Future<List<_i8.EvaluationResult>>);
+          as _i5.Future<List<_i9.EvaluationResult>>);
 
   @override
   _i5.Future<void> delete(String? id) =>

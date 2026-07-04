@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:prepare_with_atlas/features/ai_provider/domain/ai_completion_result.dart';
@@ -10,18 +11,31 @@ class GeminiProvider implements AiProvider {
   /// Creates a [GeminiProvider] with the given [apiKey].
   ///
   /// Optionally override the default model via [modelOverride].
+  /// Per-capability overrides ([textModelOverride], [visionModelOverride],
+  /// [audioModelOverride]) take precedence over [modelOverride] for their
+  /// respective operations.
   /// A custom [dio] instance may be injected for testing.
   GeminiProvider({
     required String apiKey,
     String modelOverride = '',
+    String? textModelOverride,
+    String? visionModelOverride,
+    String? audioModelOverride,
     Dio? dio,
   })  : _apiKey = apiKey,
-        _model =
-            modelOverride.isNotEmpty ? modelOverride : 'gemini-2.0-flash',
+        _model = modelOverride.isNotEmpty
+            ? modelOverride
+            : 'gemini-2.0-flash',
+        _textModel = textModelOverride ?? modelOverride,
+        _visionModel = visionModelOverride ?? modelOverride,
+        _audioModel = audioModelOverride ?? modelOverride,
         _dio = dio ?? _buildDio();
 
   final String _apiKey;
   final String _model;
+  final String _textModel;
+  final String _visionModel;
+  final String _audioModel;
   final Dio _dio;
 
   static const _baseUrl =
@@ -44,6 +58,12 @@ class GeminiProvider implements AiProvider {
   bool get supportsVision => true;
 
   @override
+  bool get supportsAudioTranscription => true;
+
+  @override
+  bool get supportsNativeAudio => true;
+
+  @override
   Future<AiCompletionResult> complete(
     List<AiMessage> messages,
   ) async {
@@ -55,12 +75,143 @@ class GeminiProvider implements AiProvider {
     final systemText =
         systemMessages.map((m) => m.content).join('\n').trim();
 
+    final hasImage = userMessages.any(
+      (m) => m.imageBytes != null && m.imageBytes!.isNotEmpty,
+    );
+    final model = hasImage
+        ? (_visionModel.isNotEmpty ? _visionModel : _model)
+        : (_textModel.isNotEmpty ? _textModel : _model);
+
     final contents = userMessages
         .map((m) => {
               'role': m.role == 'assistant' ? 'model' : 'user',
               'parts': _messageParts(m),
             })
         .toList();
+
+    final body = <String, dynamic>{
+      'contents': contents,
+    };
+
+    if (systemText.isNotEmpty) {
+      body['systemInstruction'] = {
+        'parts': [
+          {'text': systemText},
+        ],
+      };
+    }
+
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '$_baseUrl/$model:generateContent?key=$_apiKey',
+        data: body,
+        options: Options(
+          headers: {'Content-Type': 'application/json'},
+        ),
+      );
+      final data = response.data!;
+      final candidates = data['candidates'] as List<dynamic>;
+      final candidate =
+          candidates[0] as Map<String, dynamic>;
+      final content =
+          candidate['content'] as Map<String, dynamic>;
+      final parts = content['parts'] as List<dynamic>;
+      final firstPart =
+          parts[0] as Map<String, dynamic>;
+      final usageMeta =
+          data['usageMetadata'] as Map<String, dynamic>? ?? {};
+      return AiCompletionResult(
+        content: firstPart['text'] as String,
+        providerName: providerName,
+        modelUsed: model,
+        promptTokens:
+            usageMeta['promptTokenCount'] as int? ?? 0,
+        completionTokens:
+            usageMeta['candidatesTokenCount'] as int? ?? 0,
+      );
+    } on DioException catch (e) {
+      throw _mapError(e);
+    }
+  }
+
+  @override
+  Future<bool> testConnection() async {
+    await complete([
+      const AiMessage(role: 'user', content: 'Hello'),
+    ]);
+    return true;
+  }
+
+  @override
+  Future<String> transcribe(
+    Uint8List audioBytes, {
+    required String mimeType,
+  }) async {
+    final audioBase64 = base64Encode(audioBytes);
+    final model = _audioModel.isNotEmpty ? _audioModel : _model;
+    final parts = [
+      {'text': 'Please transcribe the following audio accurately.'},
+      {
+        'inlineData': {
+          'mimeType': mimeType,
+          'data': audioBase64,
+        },
+      },
+    ];
+
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '$_baseUrl/$model:generateContent?key=$_apiKey',
+        data: {
+          'contents': [
+            {
+              'parts': parts,
+            },
+          ],
+        },
+        options: Options(
+          headers: {'Content-Type': 'application/json'},
+        ),
+      );
+      final data = response.data!;
+      final candidates = data['candidates'] as List<dynamic>;
+      final candidate = candidates[0] as Map<String, dynamic>;
+      final content = candidate['content'] as Map<String, dynamic>;
+      final partsOut = content['parts'] as List<dynamic>;
+      final firstPart = partsOut[0] as Map<String, dynamic>;
+      return firstPart['text'] as String? ?? '';
+    } on DioException catch (e) {
+      throw _mapError(e);
+    }
+  }
+
+  @override
+  Future<AiCompletionResult> completeWithAudio(
+    List<AiMessage> messages,
+    Uint8List audioBytes, {
+    required String mimeType,
+  }) async {
+    final systemMessages =
+        messages.where((m) => m.role == 'system').toList();
+    final userMessages =
+        messages.where((m) => m.role != 'system').toList();
+
+    final systemText =
+        systemMessages.map((m) => m.content).join('\n').trim();
+
+    final audioBase64 = base64Encode(audioBytes);
+    final contents = userMessages.map((m) => {
+          'role': m.role == 'assistant' ? 'model' : 'user',
+          'parts': [
+            ..._messageParts(m),
+            {
+              'inlineData': {
+                'mimeType': mimeType,
+                'data': audioBase64,
+              },
+            },
+          ],
+        }).toList();
 
     final body = <String, dynamic>{
       'contents': contents,
@@ -84,35 +235,23 @@ class GeminiProvider implements AiProvider {
       );
       final data = response.data!;
       final candidates = data['candidates'] as List<dynamic>;
-      final candidate =
-          candidates[0] as Map<String, dynamic>;
-      final content =
-          candidate['content'] as Map<String, dynamic>;
+      final candidate = candidates[0] as Map<String, dynamic>;
+      final content = candidate['content'] as Map<String, dynamic>;
       final parts = content['parts'] as List<dynamic>;
-      final firstPart =
-          parts[0] as Map<String, dynamic>;
+      final firstPart = parts[0] as Map<String, dynamic>;
       final usageMeta =
           data['usageMetadata'] as Map<String, dynamic>? ?? {};
       return AiCompletionResult(
         content: firstPart['text'] as String,
         providerName: providerName,
         modelUsed: _model,
-        promptTokens:
-            usageMeta['promptTokenCount'] as int? ?? 0,
+        promptTokens: usageMeta['promptTokenCount'] as int? ?? 0,
         completionTokens:
             usageMeta['candidatesTokenCount'] as int? ?? 0,
       );
     } on DioException catch (e) {
       throw _mapError(e);
     }
-  }
-
-  @override
-  Future<bool> testConnection() async {
-    await complete([
-      const AiMessage(role: 'user', content: 'Hello'),
-    ]);
-    return true;
   }
 
   List<Map<String, dynamic>> _messageParts(AiMessage msg) {

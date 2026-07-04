@@ -1,9 +1,13 @@
 import 'dart:developer' as dev;
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:prepare_with_atlas/features/ai_provider/application/ai_provider_providers.dart';
 import 'package:prepare_with_atlas/features/ai_provider/domain/ai_message.dart';
 import 'package:prepare_with_atlas/features/ai_provider/domain/ai_provider.dart';
+import 'package:prepare_with_atlas/features/ai_provider/domain/ai_provider_config.dart';
+import 'package:prepare_with_atlas/features/ai_provider/data/ai_provider_factory.dart';
 import 'package:prepare_with_atlas/features/evaluation/application/evaluation_dependency_providers.dart';
 import 'package:prepare_with_atlas/features/evaluation/application/response_parser.dart';
 import 'package:prepare_with_atlas/features/history/application/re_evaluation_state.dart';
@@ -28,6 +32,23 @@ class ReEvaluationController extends Notifier<Map<int, ReEvaluationStatus>> {
   @override
   Map<int, ReEvaluationStatus> build() => const {};
 
+  late final AiProvider Function(AiProviderConfig) _resolveProvider =
+      ref.read(aiProviderBuilderProvider);
+
+  late final AiProvider Function(AiProviderConfig, String) _resolveProviderWithModel =
+      ref.read(aiProviderBuilderWithModelProvider);
+
+  AiProvider? _resolveAudioProvider(
+    AiProviderConfig? config,
+    String? modelOverride,
+  ) {
+    if (config == null) return null;
+    if (modelOverride != null && modelOverride.isNotEmpty) {
+      return _resolveProviderWithModel(config, modelOverride);
+    }
+    return _resolveProvider(config);
+  }
+
   /// Returns the current status for [sessionId], or [ReEvaluationIdle] if
   /// no request has been made.
   ReEvaluationStatus statusFor(int sessionId) =>
@@ -47,6 +68,8 @@ class ReEvaluationController extends Notifier<Map<int, ReEvaluationStatus>> {
     required List<StageNote> notes,
     required AiProvider provider,
     Uint8List? whiteboardScreenshot,
+    bool voiceRecordingEnabled = false,
+    String? audioModelOverride,
   }) async {
     if (state[sessionId] is ReEvaluationRunning) {
       dev.log(
@@ -68,10 +91,19 @@ class ReEvaluationController extends Notifier<Map<int, ReEvaluationStatus>> {
     final parser = ref.read(responseParserProvider);
     final repository = ref.read(evaluationRepositoryProvider);
 
+    // Transcribe audio if voice recording was enabled for this session.
+    List<StageNote> notesToEval = notes;
+    if (voiceRecordingEnabled) {
+      notesToEval = await _transcribeNotesWithAudio(
+        notes,
+        audioModelOverride,
+      );
+    }
+
     final systemPrompt = promptBuilder.buildSystemPrompt();
     final userPrompt = promptBuilder.buildUserPrompt(
       problem: problem,
-      notes: notes,
+      notes: notesToEval,
       whiteboardScreenshot: whiteboardScreenshot,
       referenceAnswer: problem.referenceSolution,
     );
@@ -143,6 +175,54 @@ class ReEvaluationController extends Notifier<Map<int, ReEvaluationStatus>> {
 
   void _setStatus(int sessionId, ReEvaluationStatus status) {
     state = {...state, sessionId: status};
+  }
+
+  /// Transcribes audio for each stage's notes using the Audio model.
+  Future<List<StageNote>> _transcribeNotesWithAudio(
+    List<StageNote> notes,
+    String? audioModelOverride,
+  ) async {
+    final result = <StageNote>[];
+    final aiState = ref.read(aiProviderControllerProvider);
+    final config = aiState.activeConfig;
+    final audioProvider = _resolveAudioProvider(config, audioModelOverride);
+
+    for (final note in notes) {
+      if (note.audioFilePath != null && note.audioFilePath!.isNotEmpty) {
+        final file = File(note.audioFilePath!);
+        if (await file.exists()) {
+          try {
+            final audioBytes = await file.readAsBytes();
+            String transcript;
+            if (audioProvider != null &&
+                audioProvider.supportsAudioTranscription) {
+              transcript = await audioProvider.transcribe(
+                audioBytes,
+                mimeType: 'audio/flac',
+              );
+            } else {
+              transcript = note.notes;
+            }
+            result.add(note.copyWith(
+              notes: '${note.notes}\n\n[Transcript]: $transcript',
+            ));
+          } catch (e) {
+            dev.log(
+              'Failed to transcribe audio for stage ${note.stage.displayName}: $e',
+              name: 'ReEvaluationController',
+              level: 900,
+            );
+            result.add(note);
+          }
+        } else {
+          result.add(note);
+        }
+      } else {
+        result.add(note);
+      }
+    }
+
+    return result;
   }
 }
 

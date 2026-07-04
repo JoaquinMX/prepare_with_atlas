@@ -2,6 +2,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:prepare_with_atlas/features/interview_session/domain/interview_session.dart';
 import 'package:prepare_with_atlas/features/interview_session/domain/interview_stage.dart';
 import 'package:prepare_with_atlas/features/interview_session/domain/stage_note.dart';
+import 'package:prepare_with_atlas/features/recording/application/audio_recorder_state.dart';
 
 part 'session_state.freezed.dart';
 
@@ -31,5 +32,8 @@ abstract class SessionState with _$SessionState {
     /// Set to `true` after `endSession` completes successfully to signal that
     /// the UI should navigate to the evaluation flow.
     @Default(false) bool pendingEvaluation,
+
+    /// The recording mode selected at session start.
+    @Default(RecordingMode.notesOnly) RecordingMode recordingMode,
   }) = _SessionState;
 }

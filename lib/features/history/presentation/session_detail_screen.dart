@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:prepare_with_atlas/core/theme/atlas_colors.dart';
 import 'package:prepare_with_atlas/features/ai_provider/data/ai_provider_factory.dart';
+import 'package:prepare_with_atlas/features/ai_provider/domain/ai_provider_config.dart';
 import 'package:prepare_with_atlas/features/evaluation/application/evaluation_dependency_providers.dart';
 import 'package:prepare_with_atlas/features/evaluation/domain/evaluation_result.dart';
 import 'package:prepare_with_atlas/features/evaluation/presentation/score_card_widget.dart';
@@ -17,6 +18,7 @@ import 'package:prepare_with_atlas/features/history/application/re_evaluation_st
 import 'package:prepare_with_atlas/features/history/domain/session_summary.dart';
 import 'package:prepare_with_atlas/features/history/presentation/re_evaluate_provider_sheet.dart';
 import 'package:prepare_with_atlas/features/interview_session/application/session_providers.dart';
+import 'package:prepare_with_atlas/features/recording/application/audio_recorder_state.dart';
 import 'package:prepare_with_atlas/features/interview_session/domain/interview_stage.dart';
 import 'package:prepare_with_atlas/features/interview_session/domain/stage_note.dart';
 import 'package:prepare_with_atlas/features/problem_bank/application/problem_repository_provider.dart';
@@ -665,6 +667,9 @@ class _ActionBar extends ConsumerWidget {
       ),
     );
 
+    final hasAudioRecordings = notes.any(
+      (n) => n.audioFilePath != null && n.audioFilePath!.isNotEmpty,
+    );
     unawaited(
       reEvalController.start(
         sessionId: sessionId,
@@ -672,6 +677,12 @@ class _ActionBar extends ConsumerWidget {
         notes: notes,
         provider: aiProvider,
         whiteboardScreenshot: screenshot,
+        voiceRecordingEnabled: hasAudioRecordings,
+        audioModelOverride: config is AiProviderConfig
+            ? (config.audioModelOverride ??
+               config.visionModelOverride ??
+               config.textModelOverride)
+            : null,
       ),
     );
   }

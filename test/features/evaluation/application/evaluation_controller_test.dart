@@ -2,8 +2,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
+import 'package:prepare_with_atlas/features/ai_provider/application/ai_provider_controller.dart';
+import 'package:prepare_with_atlas/features/ai_provider/application/ai_provider_providers.dart';
+import 'package:prepare_with_atlas/features/ai_provider/application/ai_provider_state.dart';
+import 'package:prepare_with_atlas/features/ai_provider/data/ai_provider_factory.dart';
 import 'package:prepare_with_atlas/features/ai_provider/domain/ai_completion_result.dart';
 import 'package:prepare_with_atlas/features/ai_provider/domain/ai_provider.dart';
+import 'package:prepare_with_atlas/features/ai_provider/domain/ai_provider_config.dart';
 import 'package:prepare_with_atlas/features/evaluation/application/evaluation_providers.dart';
 import 'package:prepare_with_atlas/features/evaluation/application/evaluation_state.dart';
 import 'package:prepare_with_atlas/features/evaluation/domain/evaluation_repository.dart';
@@ -78,12 +83,40 @@ void main() {
     when(mockProvider.providerName).thenReturn('anthropic');
     when(mockProvider.currentModel).thenReturn('claude-3-5-sonnet');
     when(mockProvider.supportsVision).thenReturn(false);
+    when(mockProvider.supportsAudioTranscription).thenReturn(false);
+    when(mockProvider.supportsNativeAudio).thenReturn(false);
     when(mockRepo.save(any)).thenAnswer((_) async {});
+
+    // Override the factory so _resolveTextProvider returns our mock
+    // instead of building a real provider from the config.
+    AiProvider Function(AiProviderConfig) fakeBuilder =
+        (config) => mockProvider;
+    AiProvider Function(AiProviderConfig, String) fakeBuilderWithModel =
+        (config, model) => mockProvider;
+
+    // Pre-built state so EvaluationController reads a non-null activeConfig
+    const config = ApiKeyConfig(
+      providerName: 'anthropic',
+      apiKey: 'test-key',
+    );
+    final fakeState = AiProviderState(
+      activeProvider: mockProvider,
+      activeConfig: config,
+    );
 
     container = ProviderContainer(
       overrides: [
-        evaluationRepositoryProvider.overrideWithValue(mockRepo),
+        // Override the builders so the controller uses our mock
+        aiProviderBuilderProvider.overrideWithValue(fakeBuilder),
+        aiProviderBuilderWithModelProvider.overrideWithValue(
+            fakeBuilderWithModel),
+        // Override the AI provider controller with a fake that has no async init
+        aiProviderControllerProvider.overrideWith(
+          () => _FakeAiProviderController(fakeState),
+        ),
+        // Provide the mock provider for evaluation
         activeAiProviderForEvaluationProvider.overrideWithValue(mockProvider),
+        evaluationRepositoryProvider.overrideWithValue(mockRepo),
       ],
     );
   });
@@ -151,7 +184,6 @@ void main() {
     });
 
     test('AI throws → retries, then emits EvaluationError', () async {
-      // Always throws
       when(mockProvider.complete(any)).thenThrow(
         const AiProviderException('Network error'),
       );
@@ -167,7 +199,6 @@ void main() {
       final state = container.read(evaluationControllerProvider);
       expect(state, isA<EvaluationError>());
 
-      // Should have retried 2 extra times = 3 total calls
       verify(mockProvider.complete(any)).called(3);
     });
 
@@ -201,4 +232,17 @@ void main() {
       expect(state, isA<EvaluationIdle>());
     });
   });
+}
+
+/// A fake [AiProviderController] that returns a pre-set state synchronously
+/// without running any async initialization.
+class _FakeAiProviderController extends AiProviderController {
+  _FakeAiProviderController(this._initialState);
+
+  final AiProviderState _initialState;
+
+  @override
+  AiProviderState build() {
+    return _initialState;
+  }
 }
